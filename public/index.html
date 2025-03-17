@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>File Sorter</title>
+<style>
+  body { font-family: Arial, sans-serif; }
+  .file-item { margin: 10px 0; }
+  button { margin-left: 10px; }
+  img, video { max-width: 800px; display: block; margin-top: 10px; }
+  .keyboard-shortcut { color: #666; font-size: 0.8em; }
+</style>
+</head>
+<body>
+<h1>File Sorter</h1>
+<div id="fileList"></div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', loadFiles);
+
+  const fileList = document.getElementById('fileList');
+  let filesQueue = [];
+  let currentButtons = {};
+
+  async function loadFiles() {
+    try {
+      const response = await fetch('/new-list-dump-files');
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      const files = await response.json();
+      if (files.length === 0) {
+        fileList.innerHTML = '<p>No files found in the dump directory.</p>';
+      } else {
+        filesQueue = files;
+        displayNextFile();
+      }
+    } catch (error) {
+      fileList.innerHTML = `<p>Error loading files: ${error.message}</p>`;
+    }
+  }
+
+  // Keyboard listener untuk shortcut
+  document.addEventListener('keydown', function(e) {
+    // Jangan proses shortcut jika sedang mengetik
+    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+      switch (e.key) {
+        case '1':
+          if (currentButtons.button1) {
+            currentButtons.button1.click();
+            e.preventDefault();
+          }
+          break;
+        case '2':
+          if (currentButtons.button2) {
+            currentButtons.button2.click();
+            e.preventDefault();
+          }
+          break;
+        case '3':
+          if (currentButtons.button3) {
+            currentButtons.button3.click();
+            e.preventDefault();
+          }
+          break;
+        case '4':
+          if (currentButtons.button4) {
+            currentButtons.button4.click();
+            e.preventDefault();
+          }
+          break;
+        case '5':
+          if (currentButtons.button5) {
+            currentButtons.button5.click();
+            e.preventDefault();
+          }
+          break;
+        case 'Backspace':
+          if (currentButtons.buttonDelete) {
+            currentButtons.buttonDelete.click();
+            e.preventDefault();
+          }
+          break;
+      }
+    }
+  });
+
+  function displayNextFile() {
+    fileList.innerHTML = '';
+    // Reset tombol untuk shortcut keyboard
+    currentButtons = {};
+    
+    if (filesQueue.length === 0) {
+      fileList.innerHTML = '<p>All files have been moved.</p>';
+      return;
+    }
+    
+    const fileName = filesQueue.shift();
+    const fileItem = document.createElement('div');
+    fileItem.classList.add('file-item');
+    fileItem.textContent = fileName;
+
+    const folder1Button = document.createElement('button');
+    folder1Button.textContent = '(1) Move to MTS';
+    folder1Button.addEventListener('click', () => moveFile(fileName, 'MTS'));
+    currentButtons.button1 = folder1Button;
+
+    const folder2Button = document.createElement('button');
+    folder2Button.textContent = '(2) Move to SD';
+    folder2Button.addEventListener('click', () => moveFile(fileName, 'SD'));
+    currentButtons.button2 = folder2Button;
+
+    const folder3Button = document.createElement('button');
+    folder3Button.textContent = '(3) Move to sort3';
+    folder3Button.addEventListener('click', () => moveFile(fileName, 'sort3'));
+    currentButtons.button3 = folder3Button;
+
+    const folder4Button = document.createElement('button');
+    folder4Button.textContent = '(4) Move to sort4';
+    folder4Button.addEventListener('click', () => moveFile(fileName, 'sort4'));
+    currentButtons.button4 = folder4Button;
+
+    const folder5Button = document.createElement('button');
+    folder5Button.textContent = '(5) Move to sort5';
+    folder5Button.addEventListener('click', () => moveFile(fileName, 'sort5'));
+    currentButtons.button5 = folder5Button;
+
+    const deleteButton = document.createElement('button');
+    deleteButton.textContent = '(Del) Delete';
+    deleteButton.addEventListener('click', () => deleteFile(fileName));
+    currentButtons.buttonDelete = deleteButton;
+
+    fileItem.appendChild(folder1Button);
+    fileItem.appendChild(folder2Button);
+    fileItem.appendChild(folder3Button);
+    fileItem.appendChild(folder4Button);
+    fileItem.appendChild(folder5Button);
+    fileItem.appendChild(deleteButton);
+
+    const fileExtension = fileName.split('.').pop().toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExtension)) {
+      const img = document.createElement('img');
+      img.alt = `Image: ${fileName}`;
+      img.crossOrigin = "anonymous";
+      img.src = `/file/${encodeURIComponent(fileName)}`;
+      
+      // Perbaikan penanganan error gambar
+      img.addEventListener('error', function() {
+        console.error(`Failed to load image from /file/${fileName}`);
+        // Tampilkan pesan error yang lebih jelas
+        const errorMsg = document.createElement('div');
+        errorMsg.textContent = `Cannot display image: ${fileName}`;
+        errorMsg.style.padding = '10px';
+        errorMsg.style.backgroundColor = '#f8d7da';
+        errorMsg.style.color = '#721c24';
+        errorMsg.style.borderRadius = '4px';
+        if (this.parentNode) this.parentNode.replaceChild(errorMsg, this);
+      });
+      
+      img.onload = () => console.log(`Successfully loaded image: ${fileName}`);
+      fileItem.appendChild(img);
+    } else if (['mp4', 'webm', 'ogg'].includes(fileExtension)) {
+      const video = document.createElement('video');
+      video.src = `/file/${encodeURIComponent(fileName)}`;
+      video.controls = true;
+      video.onerror = () => {
+        console.error(`Failed to load video from /file/${fileName}`);
+        // Tampilkan pesan error untuk video
+        const errorMsg = document.createElement('div');
+        errorMsg.textContent = `Cannot display video: ${fileName}`;
+        errorMsg.style.padding = '10px';
+        errorMsg.style.backgroundColor = '#f8d7da';
+        errorMsg.style.color = '#721c24';
+        errorMsg.style.borderRadius = '4px';
+        if (video.parentNode) video.parentNode.replaceChild(errorMsg, video);
+      };
+      fileItem.appendChild(video);
+    }
+
+    fileList.appendChild(fileItem);
+  }
+
+  async function moveFile(fileName, folder) {
+    const response = await fetch('/move-file', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ fileName, folder })
+    });
+
+    const result = await response.json();
+    // alert(result.message);
+    displayNextFile(); // Display the next file after moving the current one
+  }
+
+  async function deleteFile(fileName) {
+    const response = await fetch('/delete-file', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ fileName })
+    });
+
+    const result = await response.json();
+    // alert(result.message);
+    displayNextFile(); // Display the next file after deleting the current one
+  }
+</script>
+</body>
+</html>
