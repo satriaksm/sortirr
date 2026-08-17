@@ -1,213 +1,1063 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>File Sorter</title>
-<style>
-  body { font-family: Arial, sans-serif; }
-  .file-item { margin: 10px 0; }
-  button { margin-left: 10px; }
-  img, video { max-width: 800px; display: block; margin-top: 10px; }
-  .keyboard-shortcut { color: #666; font-size: 0.8em; }
-</style>
-</head>
-<body>
-<h1>File Sorter</h1>
-<div id="fileList"></div>
-
-<script>
-  document.addEventListener('DOMContentLoaded', loadFiles);
-
-  const fileList = document.getElementById('fileList');
-  let filesQueue = [];
-  let currentButtons = {};
-
-  async function loadFiles() {
-    try {
-      const response = await fetch('/new-list-dump-files');
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sortirr - Smart Universal File Sorter</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --bg-main: #0f172a;
+        --bg-card: #1e293b;
+        --bg-card-hover: #334155;
+        --border-color: #334155;
+        --primary: #6366f1;
+        --primary-hover: #4f46e5;
+        --danger: #ef4444;
+        --danger-hover: #dc2626;
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+        --badge-bg: #334155;
+        --badge-text: #38bdf8;
       }
-      const files = await response.json();
-      if (files.length === 0) {
-        fileList.innerHTML = '<p>No files found in the dump directory.</p>';
-      } else {
-        filesQueue = files;
-        displayNextFile();
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
       }
-    } catch (error) {
-      fileList.innerHTML = `<p>Error loading files: ${error.message}</p>`;
-    }
-  }
 
-  // Keyboard listener untuk shortcut
-  document.addEventListener('keydown', function(e) {
-    // Jangan proses shortcut jika sedang mengetik
-    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
-      switch (e.key) {
-        case '1':
-          if (currentButtons.button1) {
-            currentButtons.button1.click();
-            e.preventDefault();
-          }
-          break;
-        case '2':
-          if (currentButtons.button2) {
-            currentButtons.button2.click();
-            e.preventDefault();
-          }
-          break;
-        case '3':
-          if (currentButtons.button3) {
-            currentButtons.button3.click();
-            e.preventDefault();
-          }
-          break;
-        case '4':
-          if (currentButtons.button4) {
-            currentButtons.button4.click();
-            e.preventDefault();
-          }
-          break;
-        case '5':
-          if (currentButtons.button5) {
-            currentButtons.button5.click();
-            e.preventDefault();
-          }
-          break;
-        case 'Backspace':
-          if (currentButtons.buttonDelete) {
-            currentButtons.buttonDelete.click();
-            e.preventDefault();
-          }
-          break;
+      body {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        background-color: var(--bg-main);
+        color: var(--text-main);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
       }
-    }
-  });
 
-  function displayNextFile() {
-    fileList.innerHTML = '';
-    // Reset tombol untuk shortcut keyboard
-    currentButtons = {};
-    
-    if (filesQueue.length === 0) {
-      fileList.innerHTML = '<p>All files have been moved.</p>';
-      return;
-    }
-    
-    const fileName = filesQueue.shift();
-    const fileItem = document.createElement('div');
-    fileItem.classList.add('file-item');
-    fileItem.textContent = fileName;
+      header {
+        background-color: var(--bg-card);
+        border-bottom: 1px solid var(--border-color);
+        padding: 1rem 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      }
 
-    const folder1Button = document.createElement('button');
-    folder1Button.textContent = '(1) Move to MTS';
-    folder1Button.addEventListener('click', () => moveFile(fileName, 'MTS'));
-    currentButtons.button1 = folder1Button;
+      .logo-title {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
 
-    const folder2Button = document.createElement('button');
-    folder2Button.textContent = '(2) Move to SD';
-    folder2Button.addEventListener('click', () => moveFile(fileName, 'SD'));
-    currentButtons.button2 = folder2Button;
+      .logo-title h1 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #818cf8, #c084fc);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
 
-    const folder3Button = document.createElement('button');
-    folder3Button.textContent = '(3) Move to sort3';
-    folder3Button.addEventListener('click', () => moveFile(fileName, 'sort3'));
-    currentButtons.button3 = folder3Button;
+      .file-counter {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+        background: var(--bg-main);
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        border: 1px solid var(--border-color);
+      }
 
-    const folder4Button = document.createElement('button');
-    folder4Button.textContent = '(4) Move to sort4';
-    folder4Button.addEventListener('click', () => moveFile(fileName, 'sort4'));
-    currentButtons.button4 = folder4Button;
+      .header-actions {
+        display: flex;
+        gap: 0.75rem;
+      }
 
-    const folder5Button = document.createElement('button');
-    folder5Button.textContent = '(5) Move to sort5';
-    folder5Button.addEventListener('click', () => moveFile(fileName, 'sort5'));
-    currentButtons.button5 = folder5Button;
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        border-radius: 0.5rem;
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-decoration: none;
+      }
 
-    const deleteButton = document.createElement('button');
-    deleteButton.textContent = '(Del) Delete';
-    deleteButton.addEventListener('click', () => deleteFile(fileName));
-    currentButtons.buttonDelete = deleteButton;
+      .btn-primary {
+        background-color: var(--primary);
+        color: #ffffff;
+      }
 
-    fileItem.appendChild(folder1Button);
-    fileItem.appendChild(folder2Button);
-    fileItem.appendChild(folder3Button);
-    fileItem.appendChild(folder4Button);
-    fileItem.appendChild(folder5Button);
-    fileItem.appendChild(deleteButton);
+      .btn-primary:hover {
+        background-color: var(--primary-hover);
+        transform: translateY(-1px);
+      }
 
-    const fileExtension = fileName.split('.').pop().toLowerCase();
-    if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExtension)) {
-      const img = document.createElement('img');
-      img.alt = `Image: ${fileName}`;
-      img.crossOrigin = "anonymous";
-      img.src = `/file/${encodeURIComponent(fileName)}`;
-      
-      // Perbaikan penanganan error gambar
-      img.addEventListener('error', function() {
-        console.error(`Failed to load image from /file/${fileName}`);
-        // Tampilkan pesan error yang lebih jelas
-        const errorMsg = document.createElement('div');
-        errorMsg.textContent = `Cannot display image: ${fileName}`;
-        errorMsg.style.padding = '10px';
-        errorMsg.style.backgroundColor = '#f8d7da';
-        errorMsg.style.color = '#721c24';
-        errorMsg.style.borderRadius = '4px';
-        if (this.parentNode) this.parentNode.replaceChild(errorMsg, this);
+      .btn-secondary {
+        background-color: var(--bg-card-hover);
+        color: var(--text-main);
+        border-color: var(--border-color);
+      }
+
+      .btn-secondary:hover {
+        background-color: #475569;
+      }
+
+      .btn-danger {
+        background-color: rgba(239, 68, 68, 0.15);
+        color: #fca5a5;
+        border-color: rgba(239, 68, 68, 0.3);
+      }
+
+      .btn-danger:hover {
+        background-color: var(--danger);
+        color: #ffffff;
+      }
+
+      main {
+        max-width: 1200px;
+        width: 100%;
+        margin: 2rem auto;
+        padding: 0 1.5rem;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+      }
+
+      .current-file-card {
+        background-color: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+      }
+
+      .file-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border-color);
+        word-break: break-all;
+      }
+
+      .file-name-container {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      .file-icon-badge {
+        background: #334155;
+        color: #38bdf8;
+        padding: 0.35rem 0.65rem;
+        border-radius: 0.375rem;
+        font-weight: 700;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border: 1px solid rgba(56, 189, 248, 0.3);
+      }
+
+      .file-name {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #e2e8f0;
+      }
+
+      .actions-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .action-btn {
+        background: var(--bg-main);
+        border: 1px solid var(--border-color);
+        color: var(--text-main);
+        padding: 0.625rem 1rem;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        transition: all 0.15s ease;
+      }
+
+      .action-btn:hover {
+        border-color: var(--primary);
+        background: var(--bg-card-hover);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+      }
+
+      .key-badge {
+        background: var(--badge-bg);
+        color: var(--badge-text);
+        font-family: monospace;
+        font-weight: 700;
+        padding: 0.15rem 0.45rem;
+        border-radius: 0.25rem;
+        font-size: 0.8rem;
+        border: 1px solid rgba(56, 189, 248, 0.3);
+      }
+
+      .preview-container {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: #090d16;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        min-height: 420px;
+        max-height: 78vh;
+        overflow: auto;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        position: relative;
+      }
+
+      .preview-container img,
+      .preview-container video {
+        max-width: 100%;
+        max-height: 70vh;
+        object-fit: contain;
+        border-radius: 0.375rem;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      }
+
+      .video-preview-wrapper {
+        position: relative;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        max-width: 100%;
+        max-height: 70vh;
+        border-radius: 0.5rem;
+        overflow: hidden;
+        background: #000000;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      }
+
+      .video-preview-wrapper video {
+        display: block;
+        width: 100%;
+        max-height: 70vh;
+        object-fit: contain;
+      }
+
+      .video-loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(15, 23, 42, 0.7);
+        backdrop-filter: blur(4px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        color: #f8fafc;
+        z-index: 10;
+        transition: opacity 0.3s ease, visibility 0.3s ease;
+        pointer-events: none;
+      }
+
+      .video-loading-overlay.hidden {
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      .video-spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid rgba(99, 102, 241, 0.2);
+        border-top-color: #818cf8;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+
+      .preview-container iframe {
+        width: 100%;
+        height: 70vh;
+        border: none;
+        border-radius: 0.375rem;
+        background: #ffffff;
+      }
+
+      .preview-text-box {
+        width: 100%;
+        height: 70vh;
+        background: #0d1117;
+        color: #c9d1d9;
+        font-family: 'Fira Code', monospace;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        padding: 1.25rem;
+        border-radius: 0.375rem;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        border: 1px solid #30363d;
+        text-align: left;
+      }
+
+      .preview-audio-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1.5rem;
+        padding: 3rem;
+        width: 100%;
+      }
+
+      .preview-audio-icon {
+        font-size: 4rem;
+        animation: pulse 2s infinite ease-in-out;
+      }
+
+      @keyframes pulse {
+        0%, 100% { transform: scale(1); opacity: 0.8; }
+        50% { transform: scale(1.1); opacity: 1; }
+      }
+
+      .preview-generic-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        text-align: center;
+        padding: 3rem 1.5rem;
+        color: var(--text-muted);
+      }
+
+      .preview-generic-icon {
+        font-size: 4rem;
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: var(--text-muted);
+      }
+
+      .empty-state h3 {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+        color: var(--text-main);
+      }
+
+      /* Modal Styling */
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(4px);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+      }
+
+      .modal-overlay.active {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .modal-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 0.75rem;
+        width: 100%;
+        max-width: 600px;
+        max-height: 85vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        transform: translateY(20px);
+        transition: transform 0.2s ease;
+      }
+
+      .modal-overlay.active .modal-card {
+        transform: translateY(0);
+      }
+
+      .modal-header {
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .modal-header h2 {
+        font-size: 1.25rem;
+        font-weight: 600;
+      }
+
+      .modal-body {
+        padding: 1.5rem;
+        overflow-y: auto;
+        flex: 1;
+      }
+
+      .modal-footer {
+        padding: 1rem 1.5rem;
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+      }
+
+      .folder-rule-row {
+        display: grid;
+        grid-template-columns: 80px 1fr 40px;
+        gap: 0.75rem;
+        align-items: center;
+        margin-bottom: 0.75rem;
+      }
+
+      .input-text {
+        background: var(--bg-main);
+        border: 1px solid var(--border-color);
+        color: var(--text-main);
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+        width: 100%;
+      }
+
+      .input-text:focus {
+        outline: none;
+        border-color: var(--primary);
+      }
+
+      .text-center {
+        text-align: center;
+      }
+
+      /* Notification Toast */
+      .toast {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        color: var(--text-main);
+        padding: 0.75rem 1.25rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        transform: translateY(100px);
+        opacity: 0;
+        transition: all 0.3s ease;
+        z-index: 200;
+      }
+
+      .toast.show {
+        transform: translateY(0);
+        opacity: 1;
+      }
+
+      .toast-success {
+        border-left: 4px solid #10b981;
+      }
+
+      .toast-error {
+        border-left: 4px solid #ef4444;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="logo-title">
+        <h1>Sortirr</h1>
+        <span class="file-counter" id="fileCountBadge">0 files remaining</span>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary" id="openSettingsBtn">
+          ⚙️ Customize Folders
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <div id="appContent">
+        <!-- Rendered dynamically -->
+      </div>
+    </main>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>Customize Folder Rules & Shortcuts</h2>
+          <button class="btn btn-secondary" id="closeSettingsBtn" style="padding: 0.25rem 0.5rem;">✕</button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Assign single keys (numbers or letters) to target folder names. Files will be moved into these subdirectories inside <code>public/</code>.
+          </p>
+          <div style="display: grid; grid-template-columns: 80px 1fr 40px; gap: 0.75rem; font-weight: 600; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+            <span>KEY</span>
+            <span>FOLDER NAME</span>
+            <span>ACTION</span>
+          </div>
+          <div id="rulesList">
+            <!-- Dynamic rows -->
+          </div>
+          <button class="btn btn-secondary" id="addRuleBtn" style="width: 100%; justify-content: center; margin-top: 0.5rem;">
+            + Add New Shortcut Rule
+          </button>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="cancelSettingsBtn">Cancel</button>
+          <button class="btn btn-primary" id="saveSettingsBtn">Save Changes</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div class="toast" id="toastNotification"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/heic2any/dist/heic2any.min.js"></script>
+    <script>
+      let filesQueue = [];
+      let folderConfig = [];
+      let currentButtons = {};
+      let currentObjectUrl = null;
+      let currentFileName = null;
+
+      const IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico", "tiff", "avif"];
+      const VIDEO_EXTENSIONS = ["mp4", "webm", "ogg", "mov", "m4v", "mkv", "avi", "3gp", "flv", "wmv", "ts"];
+      const AUDIO_EXTENSIONS = ["mp3", "wav", "ogg", "flac", "m4a", "aac", "wma"];
+      const TEXT_EXTENSIONS = ["txt", "md", "json", "csv", "xml", "html", "htm", "css", "js", "ts", "jsx", "tsx", "py", "java", "c", "cpp", "cs", "php", "rb", "go", "rs", "sh", "bat", "ps1", "env", "log", "ini", "yml", "yaml", "sql", "h", "hpp", "conf"];
+
+      const appContent = document.getElementById("appContent");
+      const fileCountBadge = document.getElementById("fileCountBadge");
+      const settingsModal = document.getElementById("settingsModal");
+      const rulesList = document.getElementById("rulesList");
+      const toastNotification = document.getElementById("toastNotification");
+
+      document.addEventListener("DOMContentLoaded", () => {
+        initApp();
+        setupEventListeners();
       });
-      
-      img.onload = () => console.log(`Successfully loaded image: ${fileName}`);
-      fileItem.appendChild(img);
-    } else if (['mp4', 'webm', 'ogg'].includes(fileExtension)) {
-      const video = document.createElement('video');
-      video.src = `/file/${encodeURIComponent(fileName)}`;
-      video.controls = true;
-      video.onerror = () => {
-        console.error(`Failed to load video from /file/${fileName}`);
-        // Tampilkan pesan error untuk video
-        const errorMsg = document.createElement('div');
-        errorMsg.textContent = `Cannot display video: ${fileName}`;
-        errorMsg.style.padding = '10px';
-        errorMsg.style.backgroundColor = '#f8d7da';
-        errorMsg.style.color = '#721c24';
-        errorMsg.style.borderRadius = '4px';
-        if (video.parentNode) video.parentNode.replaceChild(errorMsg, video);
-      };
-      fileItem.appendChild(video);
-    }
 
-    fileList.appendChild(fileItem);
-  }
+      async function initApp() {
+        await fetchFolderConfig();
+        await loadFiles();
+      }
 
-  async function moveFile(fileName, folder) {
-    const response = await fetch('/move-file', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ fileName, folder })
-    });
+      async function fetchFolderConfig() {
+        try {
+          const res = await fetch("/api/folders");
+          if (res.ok) {
+            folderConfig = await res.json();
+          }
+        } catch (err) {
+          showToast("Failed to load folder config: " + err.message, "error");
+        }
+      }
 
-    const result = await response.json();
-    // alert(result.message);
-    displayNextFile(); // Display the next file after moving the current one
-  }
+      async function loadFiles() {
+        try {
+          const response = await fetch("/new-list-dump-files");
+          if (!response.ok) throw new Error("Network response was not ok");
+          const files = await response.json();
+          filesQueue = files;
+          updateFileCount();
+          displayNextFile();
+        } catch (error) {
+          appContent.innerHTML = `<div class="empty-state"><h3>Error loading files</h3><p>${error.message}</p></div>`;
+        }
+      }
 
-  async function deleteFile(fileName) {
-    const response = await fetch('/delete-file', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ fileName })
-    });
+      function updateFileCount() {
+        const count = filesQueue.length + (currentFileName ? 1 : 0);
+        fileCountBadge.textContent = `${count} file${count === 1 ? '' : 's'} remaining`;
+      }
 
-    const result = await response.json();
-    // alert(result.message);
-    displayNextFile(); // Display the next file after deleting the current one
-  }
-</script>
-</body>
+      function showToast(message, type = "success") {
+        toastNotification.textContent = message;
+        toastNotification.className = `toast toast-${type} show`;
+        setTimeout(() => {
+          toastNotification.className = "toast";
+        }, 2500);
+      }
+
+      // Keyboard shortcut handling
+      document.addEventListener("keydown", function (e) {
+        // Ignore typing in input fields
+        if (["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) {
+          return;
+        }
+
+        // Ignore shortcuts if modal is open
+        if (settingsModal.classList.contains("active")) {
+          return;
+        }
+
+        const pressedKey = e.key;
+
+        // Check for Space key to toggle play/pause for video or audio
+        if (e.code === "Space" || pressedKey === " " || pressedKey === "Spacebar") {
+          const media = document.querySelector("#appContent video, #appContent audio");
+          if (media) {
+            e.preventDefault();
+            if (media.paused) {
+              media.play().catch((err) => console.log("Play interrupted:", err));
+            } else {
+              media.pause();
+            }
+            return;
+          }
+        }
+
+        // Check for delete key (Backspace or Delete)
+        if (pressedKey === "Backspace" || pressedKey === "Delete") {
+          if (currentButtons["__DELETE__"]) {
+            currentButtons["__DELETE__"].click();
+            e.preventDefault();
+          }
+          return;
+        }
+
+        // Match case-insensitive shortcut keys
+        const matchKey = pressedKey.toLowerCase();
+        if (currentButtons[matchKey]) {
+          currentButtons[matchKey].click();
+          e.preventDefault();
+        }
+      });
+
+      function displayNextFile() {
+        appContent.innerHTML = "";
+        currentButtons = {};
+
+        if (currentObjectUrl) {
+          URL.revokeObjectURL(currentObjectUrl);
+          currentObjectUrl = null;
+        }
+
+        if (filesQueue.length === 0) {
+          currentFileName = null;
+          updateFileCount();
+          appContent.innerHTML = `
+            <div class="empty-state">
+              <h3>🎉 All files sorted!</h3>
+              <p>No more files found in the dump directory.</p>
+              <button class="btn btn-secondary" onclick="loadFiles()" style="margin-top: 1rem;">Refresh List</button>
+            </div>
+          `;
+          return;
+        }
+
+        currentFileName = filesQueue.shift();
+        updateFileCount();
+
+        const ext = currentFileName.split(".").pop().toLowerCase();
+
+        const card = document.createElement("div");
+        card.className = "current-file-card";
+
+        const isMedia = VIDEO_EXTENSIONS.includes(ext) || AUDIO_EXTENSIONS.includes(ext);
+
+        // Card Header
+        const header = document.createElement("div");
+        header.className = "file-header";
+        header.innerHTML = `
+          <div class="file-name-container" style="flex-wrap: wrap;">
+            <span class="file-icon-badge">${escapeHtml(ext)}</span>
+            <div class="file-name">${escapeHtml(currentFileName)}</div>
+            ${isMedia ? `<span class="key-badge" style="background: rgba(99,102,241,0.18); color: #a5b4fc; border-color: rgba(99,102,241,0.4); font-size: 0.75rem;" title="Tekan Space untuk Play/Pause">Space: Play/Pause</span>` : ''}
+          </div>
+          <a class="btn btn-secondary" href="/file/${encodeURIComponent(currentFileName)}" target="_blank" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">
+            ↗ Open File
+          </a>
+        `;
+        card.appendChild(header);
+
+        // Action Buttons Grid
+        const actionsGrid = document.createElement("div");
+        actionsGrid.className = "actions-grid";
+
+        // Render buttons dynamically based on folderConfig
+        folderConfig.forEach((item) => {
+          const btn = document.createElement("button");
+          btn.className = "action-btn";
+          const keyLabel = item.key.toUpperCase();
+          btn.innerHTML = `<span class="key-badge">${escapeHtml(keyLabel)}</span> ${escapeHtml(item.name)}`;
+          btn.addEventListener("click", () => moveFile(currentFileName, item.name));
+
+          actionsGrid.appendChild(btn);
+          currentButtons[item.key.toLowerCase()] = btn;
+        });
+
+        // Delete button
+        const delBtn = document.createElement("button");
+        delBtn.className = "action-btn btn-danger";
+        delBtn.innerHTML = `<span class="key-badge" style="color: #fca5a5; border-color: rgba(239,68,68,0.4);">Del</span> Delete File`;
+        delBtn.addEventListener("click", () => deleteFile(currentFileName));
+        actionsGrid.appendChild(delBtn);
+        currentButtons["__DELETE__"] = delBtn;
+
+        card.appendChild(actionsGrid);
+
+        // File Preview Box
+        const previewBox = document.createElement("div");
+        previewBox.className = "preview-container";
+
+        const fileUrl = `/file/${encodeURIComponent(currentFileName)}`;
+
+        if (["heic", "heif"].includes(ext)) {
+          const loadingMsg = document.createElement("div");
+          loadingMsg.style.color = "var(--text-muted)";
+          loadingMsg.textContent = `Converting HEIC preview: ${currentFileName}...`;
+          previewBox.appendChild(loadingMsg);
+
+          (async () => {
+            try {
+              if (typeof window.heic2any !== "function") {
+                throw new Error("heic2any library not loaded");
+              }
+              const res = await fetch(fileUrl);
+              if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+              const blob = await res.blob();
+              const converted = await window.heic2any({ blob, toType: "image/jpeg", quality: 0.85 });
+              const jpegBlob = Array.isArray(converted) ? converted[0] : converted;
+              currentObjectUrl = URL.createObjectURL(jpegBlob);
+
+              const img = document.createElement("img");
+              img.alt = currentFileName;
+              img.src = currentObjectUrl;
+              previewBox.replaceChild(img, loadingMsg);
+            } catch (err) {
+              loadingMsg.textContent = `⚠️ Cannot preview HEIC image: ${err.message}`;
+            }
+          })();
+        } else if (IMAGE_EXTENSIONS.includes(ext)) {
+          const img = document.createElement("img");
+          img.alt = currentFileName;
+          img.src = fileUrl;
+          img.onerror = () => {
+            previewBox.innerHTML = `<div style="color: #fca5a5;">⚠️ Image preview failed to load</div>`;
+          };
+          previewBox.appendChild(img);
+        } else if (VIDEO_EXTENSIONS.includes(ext)) {
+          const videoWrapper = document.createElement("div");
+          videoWrapper.className = "video-preview-wrapper";
+
+          const previewVideoUrl = `/api/video-preview/${encodeURIComponent(currentFileName)}`;
+          const thumbUrl = `/api/video-thumbnail/${encodeURIComponent(currentFileName)}`;
+
+          const loadingOverlay = document.createElement("div");
+          loadingOverlay.className = "video-loading-overlay";
+          loadingOverlay.innerHTML = `
+            <div class="video-spinner"></div>
+            <div style="font-size: 0.95rem; font-weight: 600; color: #f8fafc;">Memuat preview video...</div>
+            <div style="font-size: 0.78rem; color: #94a3b8;">Mengoptimalkan format video untuk browser</div>
+          `;
+          videoWrapper.appendChild(loadingOverlay);
+
+          const video = document.createElement("video");
+          video.controls = true;
+          video.autoplay = false;
+          video.playsInline = true;
+          video.preload = "auto";
+          video.poster = thumbUrl;
+          video.src = previewVideoUrl;
+
+          let isLoaded = false;
+          const hideLoading = () => {
+            if (!isLoaded) {
+              isLoaded = true;
+              loadingOverlay.classList.add("hidden");
+            }
+          };
+
+          // If the video can already play or has loaded metadata
+          video.addEventListener("loadeddata", hideLoading);
+          video.addEventListener("canplay", hideLoading);
+          video.addEventListener("playing", hideLoading);
+
+          video.addEventListener("error", () => {
+            loadingOverlay.classList.add("hidden");
+            videoWrapper.innerHTML = `
+              <div style="color: #fca5a5; text-align: center; padding: 2.5rem 1.5rem;">
+                <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">⚠️</div>
+                <div style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem;">Pemutaran video tidak didukung langsung</div>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">Browser Anda tidak dapat mendekode format video ini secara native.</p>
+                <div style="display: flex; gap: 0.75rem; justify-content: center;">
+                  <a class="btn btn-primary" href="${fileUrl}" target="_blank">↗ Buka File Asli</a>
+                  <a class="btn btn-secondary" href="${fileUrl}" download="${escapeHtml(currentFileName)}">⬇ Download</a>
+                </div>
+              </div>
+            `;
+          });
+
+          videoWrapper.appendChild(video);
+          previewBox.appendChild(videoWrapper);
+        } else if (AUDIO_EXTENSIONS.includes(ext)) {
+          const audioContainer = document.createElement("div");
+          audioContainer.className = "preview-audio-container";
+          
+          const icon = document.createElement("div");
+          icon.className = "preview-audio-icon";
+          icon.textContent = "🎵";
+          icon.style.cursor = "pointer";
+          icon.title = "Klik atau tekan Space untuk Play / Pause";
+
+          const audio = document.createElement("audio");
+          audio.controls = true;
+          audio.autoplay = false;
+          audio.src = fileUrl;
+          audio.style.width = "100%";
+          audio.style.maxWidth = "500px";
+
+          const toggleAudio = () => {
+            if (audio.paused) {
+              audio.play().catch((err) => console.log("Play error:", err));
+            } else {
+              audio.pause();
+            }
+          };
+
+          icon.addEventListener("click", toggleAudio);
+
+          audioContainer.appendChild(icon);
+          audioContainer.appendChild(audio);
+          previewBox.appendChild(audioContainer);
+        } else if (ext === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = fileUrl;
+          previewBox.appendChild(iframe);
+        } else if (TEXT_EXTENSIONS.includes(ext)) {
+          const textBox = document.createElement("div");
+          textBox.className = "preview-text-box";
+          textBox.textContent = "Loading file content...";
+          previewBox.appendChild(textBox);
+
+          fetch(fileUrl)
+            .then(res => {
+              if (!res.ok) throw new Error("HTTP " + res.status);
+              return res.text();
+            })
+            .then(text => {
+              textBox.textContent = text;
+            })
+            .catch(err => {
+              textBox.textContent = "Error reading text file: " + err.message;
+            });
+        } else {
+          // Generic preview for Office docs, archives (ZIP/RAR), executables, or unknown formats
+          const genericCard = document.createElement("div");
+          genericCard.className = "preview-generic-card";
+          
+          let icon = "📦";
+          if (["doc", "docx"].includes(ext)) icon = "📘";
+          else if (["xls", "xlsx"].includes(ext)) icon = "📊";
+          else if (["ppt", "pptx"].includes(ext)) icon = "📙";
+          else if (["zip", "rar", "7z", "tar", "gz"].includes(ext)) icon = "🗜️";
+
+          genericCard.innerHTML = `
+            <div class="preview-generic-icon">${icon}</div>
+            <h4 style="color: var(--text-main); font-weight: 600; font-size: 1.1rem;">.${ext.toUpperCase()} File Preview</h4>
+            <p>Direct inline render is not supported natively for binary .${ext} files.</p>
+            <div style="display: flex; gap: 0.75rem; margin-top: 0.5rem;">
+              <a class="btn btn-primary" href="${fileUrl}" target="_blank">
+                ↗ Open or View in Browser
+              </a>
+              <a class="btn btn-secondary" href="${fileUrl}" download="${escapeHtml(currentFileName)}">
+                ⬇ Download File
+              </a>
+            </div>
+          `;
+          previewBox.appendChild(genericCard);
+        }
+
+        card.appendChild(previewBox);
+        appContent.appendChild(card);
+      }
+
+      async function moveFile(fileName, folder) {
+        try {
+          const response = await fetch("/move-file", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fileName, folder }),
+          });
+          const result = await response.json();
+          if (response.ok) {
+            showToast(`Moved to "${folder}"`);
+            displayNextFile();
+          } else {
+            showToast(result.message || "Failed to move file", "error");
+          }
+        } catch (err) {
+          showToast("Error: " + err.message, "error");
+        }
+      }
+
+      async function deleteFile(fileName) {
+        try {
+          const response = await fetch("/delete-file", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fileName }),
+          });
+          const result = await response.json();
+          if (response.ok) {
+            showToast("File deleted", "error");
+            displayNextFile();
+          } else {
+            showToast(result.message || "Failed to delete file", "error");
+          }
+        } catch (err) {
+          showToast("Error: " + err.message, "error");
+        }
+      }
+
+      // Settings Modal Logic
+      function setupEventListeners() {
+        document.getElementById("openSettingsBtn").addEventListener("click", openSettings);
+        document.getElementById("closeSettingsBtn").addEventListener("click", closeSettings);
+        document.getElementById("cancelSettingsBtn").addEventListener("click", closeSettings);
+        document.getElementById("addRuleBtn").addEventListener("click", () => addRuleRow("", ""));
+        document.getElementById("saveSettingsBtn").addEventListener("click", saveSettings);
+      }
+
+      function openSettings() {
+        renderSettingsRows();
+        settingsModal.classList.add("active");
+      }
+
+      function closeSettings() {
+        settingsModal.classList.remove("active");
+      }
+
+      function renderSettingsRows() {
+        rulesList.innerHTML = "";
+        folderConfig.forEach((rule) => {
+          addRuleRow(rule.key, rule.name);
+        });
+        if (folderConfig.length === 0) {
+          addRuleRow("1", "Family");
+        }
+      }
+
+      function addRuleRow(keyVal = "", nameVal = "") {
+        const row = document.createElement("div");
+        row.className = "folder-rule-row";
+
+        const keyInput = document.createElement("input");
+        keyInput.type = "text";
+        keyInput.className = "input-text text-center";
+        keyInput.maxLength = 2;
+        keyInput.placeholder = "Key";
+        keyInput.value = keyVal;
+
+        const nameInput = document.createElement("input");
+        nameInput.type = "text";
+        nameInput.className = "input-text";
+        nameInput.placeholder = "Folder Name";
+        nameInput.value = nameVal;
+
+        const removeBtn = document.createElement("button");
+        removeBtn.className = "btn btn-danger";
+        removeBtn.style.padding = "0.4rem 0.6rem";
+        removeBtn.textContent = "✕";
+        removeBtn.addEventListener("click", () => row.remove());
+
+        row.appendChild(keyInput);
+        row.appendChild(nameInput);
+        row.appendChild(removeBtn);
+
+        rulesList.appendChild(row);
+      }
+
+      async function saveSettings() {
+        const rows = rulesList.querySelectorAll(".folder-rule-row");
+        const updatedConfig = [];
+        let hasError = false;
+
+        rows.forEach((row) => {
+          const inputs = row.querySelectorAll("input");
+          const key = inputs[0].value.trim();
+          const name = inputs[1].value.trim();
+
+          if (key && name) {
+            updatedConfig.push({ key, name });
+          } else if (key || name) {
+            hasError = true;
+          }
+        });
+
+        if (hasError) {
+          showToast("Please fill in both Shortcut Key and Folder Name for all rules", "error");
+          return;
+        }
+
+        try {
+          const res = await fetch("/api/folders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updatedConfig),
+          });
+
+          if (res.ok) {
+            folderConfig = updatedConfig;
+            showToast("Settings saved successfully!");
+            closeSettings();
+            // Re-render active file action buttons with updated config
+            if (currentFileName) {
+              filesQueue.unshift(currentFileName);
+              displayNextFile();
+            }
+          } else {
+            const errData = await res.json();
+            showToast(errData.message || "Failed to save settings", "error");
+          }
+        } catch (err) {
+          showToast("Error saving settings: " + err.message, "error");
+        }
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+    </script>
+  </body>
 </html>
