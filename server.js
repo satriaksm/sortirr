@@ -3,6 +3,7 @@ const moveFile = require('./moveFile');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const multer = require('multer');
 
 let ffmpegPath = null;
 try {
@@ -18,37 +19,57 @@ const port = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static('public'));
 
-// Ensure 'public' directory exists
+// Ensure required directories exist
 const publicDir = path.join(__dirname, 'public');
 if (!fs.existsSync(publicDir)) {
     fs.mkdirSync(publicDir, { recursive: true });
-    console.log(`Created 'public' directory at ${publicDir}`);
 }
 
-// Ensure 'public/dump' directory exists
 const dumpDir = path.join(__dirname, 'public', 'dump');
 if (!fs.existsSync(dumpDir)) {
     fs.mkdirSync(dumpDir, { recursive: true });
-    console.log(`Created 'dump' directory at ${dumpDir}`);
 }
 
-// Ensure '.cache' directory exists for video previews and thumbnails
 const cacheDir = path.join(__dirname, '.cache');
 if (!fs.existsSync(cacheDir)) {
     fs.mkdirSync(cacheDir, { recursive: true });
-    console.log(`Created '.cache' directory at ${cacheDir}`);
 }
+
+const trashDir = path.join(__dirname, '.trash');
+if (!fs.existsSync(trashDir)) {
+    fs.mkdirSync(trashDir, { recursive: true });
+}
+
+// Multer storage for uploading files into public/dump/
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, dumpDir);
+    },
+    filename: function (req, file, cb) {
+        // Preserve original file name, or resolve duplicate if needed
+        let targetName = file.originalname;
+        let counter = 1;
+        const ext = path.extname(targetName);
+        const base = path.basename(targetName, ext);
+        while (fs.existsSync(path.join(dumpDir, targetName))) {
+            targetName = `${base}_${counter}${ext}`;
+            counter++;
+        }
+        cb(null, targetName);
+    }
+});
+const upload = multer({ storage });
 
 // Path to folder configuration JSON
 const configPath = path.join(__dirname, 'config.json');
 
 const defaultFolders = [
-    { key: "1", name: "Family" },
-    { key: "2", name: "Kuliah" },
-    { key: "3", name: "prau" },
-    { key: "4", name: "Cant See" },
-    { key: "5", name: "andong" },
-    { key: "6", name: "Merbabu" }
+    { key: "1", name: "Family", color: "#6366f1" },
+    { key: "2", name: "Kuliah", color: "#06b6d4" },
+    { key: "3", name: "prau", color: "#10b981" },
+    { key: "4", name: "Cant See", color: "#f59e0b" },
+    { key: "5", name: "andong", color: "#ec4899" },
+    { key: "6", name: "Merbabu", color: "#8b5cf6" }
 ];
 
 function getFoldersConfig() {
@@ -82,6 +103,21 @@ function removeFileCache(filename) {
     }
 }
 
+// Undo Stack for reverse operations
+const actionHistory = [];
+const MAX_UNDO_HISTORY = 50;
+
+function pushUndoAction(action) {
+    actionHistory.push(action);
+    if (actionHistory.length > MAX_UNDO_HISTORY) {
+        const oldest = actionHistory.shift();
+        // If oldest was a delete, permanently purge the trash backup
+        if (oldest.type === 'delete' && oldest.trashPath && fs.existsSync(oldest.trashPath)) {
+            try { fs.unlinkSync(oldest.trashPath); } catch (_) {}
+        }
+    }
+}
+
 // Track active transcode jobs to deduplicate concurrent requests
 const activeTranscodes = new Map();
 const activeThumbnails = new Map();
@@ -109,7 +145,6 @@ function generateThumbnail(sourcePath, targetThumbPath) {
             if (code === 0 && fs.existsSync(targetThumbPath)) {
                 resolve(targetThumbPath);
             } else {
-                // Fallback: try capturing frame at 00:00:00 if 0.5s was beyond duration
                 const retryProc = spawn(ffmpegPath, [
                     '-ss', '00:00:00.000',
                     '-i', sourcePath,
@@ -191,10 +226,11 @@ let isPreCaching = false;
 async function preCacheThumbnails(files) {
     if (isPreCaching || !ffmpegPath) return;
     isPreCaching = true;
-    const videoExtensions = ['.mov', '.mp4', '.mkv', '.avi', '.webm', '.m4v', '.3gp', '.flv', '.wmv'];
+    const videoExtensions = ['.mov', '.mp4', '.mkv', '.avi', '.webm', '.m4v', '.3gp', '.flv', '.wmv', '.ts'];
     
     try {
-        for (const file of files) {
+        for (const item of files) {
+            const file = typeof item === 'object' ? item.name : item;
             const ext = path.extname(file).toLowerCase();
             if (videoExtensions.includes(ext)) {
                 const thumbPath = path.join(cacheDir, `${file}.jpg`);
@@ -213,11 +249,28 @@ async function preCacheThumbnails(files) {
     }
 }
 
+// GET /api/folders with live counts
 app.get('/api/folders', (req, res) => {
     const folders = getFoldersConfig();
-    res.json(folders);
+    const result = folders.map(f => {
+        let count = 0;
+        const targetDir = path.join(__dirname, 'public', f.name);
+        if (fs.existsSync(targetDir)) {
+            try {
+                count = fs.readdirSync(targetDir).filter(x => !x.startsWith('.')).length;
+            } catch (_) {}
+        }
+        return {
+            key: f.key,
+            name: f.name,
+            color: f.color || '#6366f1',
+            count: count
+        };
+    });
+    res.json(result);
 });
 
+// POST /api/folders - Save folder config
 app.post('/api/folders', (req, res) => {
     const folders = req.body;
     if (!Array.isArray(folders)) {
@@ -240,36 +293,162 @@ app.post('/api/folders', (req, res) => {
     }
 });
 
-app.post('/delete-file', async (req, res) => {
-    console.log('Received request to delete file:', req.body);
-    const { fileName } = req.body;
-    const filePath = path.join(__dirname, 'public', 'dump', fileName);
-  
+// POST /api/upload - Upload files to dump directory
+app.post('/api/upload', upload.array('files', 100), (req, res) => {
+    if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ message: 'No files uploaded' });
+    }
+    const uploadedNames = req.files.map(f => f.filename);
+    res.json({
+        message: `Successfully uploaded ${req.files.length} file(s)`,
+        files: uploadedNames
+    });
+});
+
+// POST /api/undo - Undo last move or delete action
+app.post('/api/undo', async (req, res) => {
+    if (actionHistory.length === 0) {
+        return res.status(400).json({ message: 'Tidak ada riwayat tindakan untuk di-undo' });
+    }
+
+    const lastAction = actionHistory.pop();
     try {
-        await fs.promises.unlink(filePath);
-        removeFileCache(fileName);
-        res.json({ message: 'File deleted successfully' });
+        if (lastAction.type === 'move') {
+            const movedPath = path.join(__dirname, 'public', lastAction.toFolder, lastAction.finalName);
+            const restorePath = path.join(dumpDir, lastAction.originalName);
+
+            if (!fs.existsSync(movedPath)) {
+                return res.status(404).json({ message: `File "${lastAction.finalName}" tidak ditemukan di folder "${lastAction.toFolder}"` });
+            }
+
+            // Restore back to dump
+            fs.renameSync(movedPath, restorePath);
+            removeFileCache(lastAction.originalName);
+            removeFileCache(lastAction.finalName);
+
+            return res.json({
+                message: `Berhasil mengembalikan "${lastAction.originalName}" dari folder "${lastAction.toFolder}"`,
+                restoredFile: lastAction.originalName,
+                action: lastAction
+            });
+        } else if (lastAction.type === 'delete') {
+            const trashPath = lastAction.trashPath;
+            const restorePath = path.join(dumpDir, lastAction.originalName);
+
+            if (!fs.existsSync(trashPath)) {
+                return res.status(404).json({ message: `File yang dihapus "${lastAction.originalName}" tidak ditemukan di tempat sampah` });
+            }
+
+            fs.renameSync(trashPath, restorePath);
+            return res.json({
+                message: `Berhasil memulihkan file "${lastAction.originalName}" yang sempat dihapus`,
+                restoredFile: lastAction.originalName,
+                action: lastAction
+            });
+        }
     } catch (err) {
-        console.error(`Error deleting file: ${fileName}`, err);
-        return res.status(500).json({ message: 'Error deleting file' });
+        console.error('Error executing undo:', err);
+        res.status(500).json({ message: `Gagal melakukan Undo: ${err.message}` });
     }
 });
 
+// POST /delete-file (Safely moved to .trash for undo support)
+app.post('/delete-file', async (req, res) => {
+    const { fileName } = req.body;
+    if (!fileName) {
+        return res.status(400).json({ message: 'Filename required' });
+    }
+    const filePath = path.join(dumpDir, fileName);
+
+    try {
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ message: `File "${fileName}" not found` });
+        }
+
+        const trashFileName = `${Date.now()}_${fileName}`;
+        const targetTrashPath = path.join(trashDir, trashFileName);
+
+        // Move to .trash instead of hard unlinking
+        fs.renameSync(filePath, targetTrashPath);
+        removeFileCache(fileName);
+
+        // Push to undo stack
+        pushUndoAction({
+            type: 'delete',
+            originalName: fileName,
+            trashPath: targetTrashPath,
+            timestamp: Date.now()
+        });
+
+        res.json({ message: 'File deleted successfully (Undoable)' });
+    } catch (err) {
+        console.error(`Error deleting file: ${fileName}`, err);
+        return res.status(500).json({ message: 'Error deleting file: ' + err.message });
+    }
+});
+
+// POST /move-file
 app.post('/move-file', async (req, res) => {
     const { fileName, folder } = req.body;
     try {
         const result = await moveFile(fileName, folder);
         removeFileCache(fileName);
+
+        // Record in undo stack
+        pushUndoAction({
+            type: 'move',
+            originalName: result.originalName,
+            finalName: result.finalName,
+            toFolder: folder,
+            timestamp: Date.now()
+        });
+
         res.json(result);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
 
+// POST /api/open-folder - Reveal folder in OS File Explorer (Windows/macOS/Linux)
+app.post('/api/open-folder', (req, res) => {
+    const { folder } = req.body;
+    let targetPath = publicDir;
+
+    if (folder === 'dump') {
+        targetPath = dumpDir;
+    } else if (folder) {
+        targetPath = path.join(publicDir, folder);
+    }
+
+    if (!fs.existsSync(targetPath)) {
+        try {
+            fs.mkdirSync(targetPath, { recursive: true });
+        } catch (e) {
+            return res.status(400).json({ message: 'Directory does not exist' });
+        }
+    }
+
+    const isWindows = process.platform === 'win32';
+    const isMac = process.platform === 'darwin';
+
+    try {
+        if (isWindows) {
+            spawn('explorer.exe', [targetPath], { detached: true, stdio: 'ignore' });
+        } else if (isMac) {
+            spawn('open', [targetPath], { detached: true, stdio: 'ignore' });
+        } else {
+            spawn('xdg-open', [targetPath], { detached: true, stdio: 'ignore' });
+        }
+        res.json({ message: `Opened ${folder || 'root'} folder in file explorer` });
+    } catch (err) {
+        res.status(500).json({ message: 'Failed to open file explorer: ' + err.message });
+    }
+});
+
 // Direct file serving (for downloads or native previews)
 app.get('/file/:filename', (req, res) => {
     const filename = req.params.filename;
-    const filePath = path.join(__dirname, 'public', 'dump', filename);
+    const filePath = path.join(dumpDir, filename);
 
     if (fs.existsSync(filePath)) {
         res.sendFile(filePath);
@@ -329,7 +508,6 @@ app.get('/api/video-preview/:filename', async (req, res) => {
     }
 
     if (!ffmpegPath) {
-        // Fallback: serve original file if FFmpeg is not available
         return res.sendFile(filePath);
     }
 
@@ -338,95 +516,111 @@ app.get('/api/video-preview/:filename', async (req, res) => {
         res.sendFile(previewPath);
     } catch (err) {
         console.error(`Error transcoding video ${filename}:`, err.message);
-        // Fallback to sending original file
         res.sendFile(filePath);
     }
 });
 
-// List files in dump directory
+// List files in dump directory with rich metadata
 app.get('/new-list-dump-files', (req, res) => {
     if (!fs.existsSync(dumpDir)) {
         fs.mkdirSync(dumpDir, { recursive: true });
-        console.log(`Created 'dump' directory at ${dumpDir}`);
         return res.json([]);
     }
     
     try {
         const rawFiles = fs.readdirSync(dumpDir);
-        const files = rawFiles.filter(file => {
-            if (file.startsWith('.')) return false;
+        const fileObjects = [];
+
+        for (const file of rawFiles) {
+            if (file.startsWith('.')) continue;
             try {
-                const stat = fs.statSync(path.join(dumpDir, file));
-                return stat.isFile();
+                const filePath = path.join(dumpDir, file);
+                const stat = fs.statSync(filePath);
+                if (stat.isFile()) {
+                    fileObjects.push({
+                        name: file,
+                        size: stat.size,
+                        mtime: stat.mtimeMs,
+                        ext: path.extname(file).replace('.', '').toLowerCase()
+                    });
+                }
             } catch (e) {
-                return false;
+                // skip unreadable file
             }
-        });
+        }
         
-        // Start background pre-caching for video thumbnails
-        preCacheThumbnails(files);
+        // Background thumbnail pre-caching
+        preCacheThumbnails(fileObjects);
         
-        res.json(files);
+        res.json(fileObjects);
     } catch (err) {
         console.error(`Error reading dump directory: ${err.message}`);
         res.status(500).json({ message: err.message });
     }
 });
 
-// Check if a file exists
-app.get('/check-file/:filename', (req, res) => {
-    const filename = req.params.filename;
-    const filePath = path.join(__dirname, 'public', 'dump', filename);
-    
-    fs.access(filePath, fs.constants.F_OK, (err) => {
-        if (err) {
-            res.json({ exists: false, message: `File ${filename} not found` });
-        } else {
-            res.json({ exists: true, path: `/dump/${filename}` });
-        }
-    });
-});
-
-// Debug route
-app.get('/debug-files', (req, res) => {
-    fs.readdir(dumpDir, (err, files) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        
-        const fileDetails = files.map(file => {
-            const filePath = path.join(dumpDir, file);
-            let stats = {};
-            try {
-                stats = fs.statSync(filePath);
-            } catch (e) {
-                stats = { error: e.message };
+// Get detailed stats of the app
+app.get('/api/stats', (req, res) => {
+    try {
+        let dumpCount = 0;
+        let dumpSize = 0;
+        if (fs.existsSync(dumpDir)) {
+            const files = fs.readdirSync(dumpDir);
+            for (const f of files) {
+                if (f.startsWith('.')) continue;
+                try {
+                    const st = fs.statSync(path.join(dumpDir, f));
+                    if (st.isFile()) {
+                        dumpCount++;
+                        dumpSize += st.size;
+                    }
+                } catch (_) {}
             }
-            
+        }
+
+        const folders = getFoldersConfig();
+        const folderStats = folders.map(f => {
+            const folderPath = path.join(publicDir, f.name);
+            let count = 0;
+            let size = 0;
+            if (fs.existsSync(folderPath)) {
+                try {
+                    const items = fs.readdirSync(folderPath);
+                    for (const item of items) {
+                        if (item.startsWith('.')) continue;
+                        try {
+                            const st = fs.statSync(path.join(folderPath, item));
+                            if (st.isFile()) {
+                                count++;
+                                size += st.size;
+                            }
+                        } catch (_) {}
+                    }
+                } catch (_) {}
+            }
             return {
-                name: file,
-                path: filePath,
-                exists: fs.existsSync(filePath),
-                stats: {
-                    size: stats.size,
-                    isFile: stats.isFile ? stats.isFile() : 'error',
-                    isDirectory: stats.isDirectory ? stats.isDirectory() : 'error',
-                    permissions: stats.mode
-                }
+                name: f.name,
+                key: f.key,
+                color: f.color || '#6366f1',
+                count,
+                size
             };
         });
-        
+
         res.json({
-            serverDirectory: __dirname,
-            dumpDirectory: dumpDir,
-            ffmpegAvailable: !!ffmpegPath,
-            files: fileDetails
+            dumpCount,
+            dumpSize,
+            folders: folderStats,
+            canUndo: actionHistory.length > 0,
+            lastAction: actionHistory[actionHistory.length - 1] || null
         });
-    });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 });
 
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
-    console.log(`Serving static files from ${path.join(__dirname, 'public')}`);
+    console.log(`Serving static files from ${publicDir}`);
     console.log(`Dump directory at ${dumpDir}`);
-});
+});

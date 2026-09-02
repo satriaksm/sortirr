@@ -1,60 +1,125 @@
-# Sortirr
+# Sortirr — Smart Universal Media & File Sorter
 
-Sortirr adalah aplikasi untuk memindahkan file ke folder tertentu berdasarkan input pengguna.
+**Sortirr** adalah aplikasi web produktivitas yang dirancang untuk mengorganisasi dan memilah ribuan file lokal (foto, video, audio, dokumen, dan kode) secara instan ke dalam direktori tujuan yang terstruktur melalui antarmuka modern berestetika *dark glassmorphism* dan kontrol *single-key keyboard shortcut*, dibangun menggunakan arsitektur backend **Node.js** dan **Express.js**, engine transcoding **FFmpeg** (`ffmpeg-static`) untuk streaming video performa tinggi dan pembuatan *thumbnail* instan, middleware **Multer** untuk pengunggahan berkas batch, serta antarmuka frontend reaktif berbasis **HTML5**, **Modern Vanilla CSS** (dengan CSS custom properties, micro-animations, dan tata letak responsif), **Vanilla JavaScript ES6+**, library **heic2any** untuk konversi format Apple HEIC/HEIF langsung di sisi klien, serta **Web Audio API** untuk *real-time synthetic sound feedback*.
 
-## Persyaratan
+---
 
-- Node.js
-- npm (Node Package Manager)
+## Fitur Utama
 
-## Instalasi
+Sortirr dilengkapi dengan berbagai fitur produktivitas tingkat lanjut yang dirancang untuk mempercepat alur kerja pemilihan dan penyortiran media dalam jumlah besar:
 
-1. Clone repositori ini ke komputer Anda:
+### 1. Fast Single-Key Sorting & Pintasan Keyboard
+- Pindahkan berkas ke folder tujuan hanya dengan **1 ketukan tombol** keyboard (misal: tombol `1` sampai `9` atau huruf apa pun).
+- Tombol `Del` atau `Backspace` untuk memindahkan berkas ke tempat sampah aman (*safe recycle buffer*).
+- Tombol `S` (*Skip*) untuk melewati file saat ini ke antrean belakang, dan tombol `P` (*Previous*) untuk kembali ke file sebelumnya.
+- Tombol `Space` untuk memulai/menghentikan pemutaran video dan audio secara instan.
 
-    ```bash
-    git clone https://github.com/username/sortirr.git
-    cd sortirr
-    ```
+### 2. Full Undo System (Ctrl + Z)
+- Fitur pembatalan aksi (*Undo*) hingga 50 riwayat terakhir.
+- Mengembalikan berkas yang tidak sengaja dipindahkan langsung kembali ke folder `dump/`.
+- Memulihkan berkas yang baru dihapus dari direktori `.trash` tanpa kehilangan data.
 
-2. Instal dependensi yang diperlukan:
+### 3. Universal Media & File Previews
+- **Gambar & Foto**: Mendukung format standar (`PNG`, `JPG`, `WebP`, `GIF`, `SVG`, `BMP`, `AVIF`) dan format Apple (`HEIC`/`HEIF`) dengan rendering otomatis.
+- **Image Controls**: Fitur *Zoom In/Out*, *Rotate 90°*, *Flip Horizontal*, *Reset*, dan *Fullscreen Lightbox* (tombol `F` atau *Double Click*).
+- **Video Player Cerdas**: Pratinjau video universal (`MP4`, `MKV`, `MOV`, `AVI`, `WebM`, `FLV`, `WMV`, `3GP`, `TS`) dengan transkoding latar belakang berkecepatan tinggi via FFmpeg ke H.264 FastStart MP4 dan poster thumbnail otomatis.
+- **Audio Visualizer**: Pemutar audio interaktif (`MP3`, `WAV`, `OGG`, `FLAC`, `M4A`, `AAC`) dengan animasi *orb pulse visualizer*.
+- **Dokumen Teks & Kode Sumber**: Tampilan teks monospace dengan nomor baris dan tombol *Copy to Clipboard* (`.js`, `.py`, `.json`, `.md`, `.sql`, `.env`, `.csv`, `.yml`, dll.).
+- **PDF & Office Docs**: Penampil dokumen PDF tersemat (*embedded*) serta kartu aksi langsung untuk membuka atau mengunduh arsip zip/rar dan dokumen biner.
 
-    ```bash
-    npm install
-    ```
+### 4. Drag & Drop Upload & Antrean Interaktif
+- Seret (*drag & drop*) berkas langsung dari file manager OS ke jendela browser untuk menambahkan file baru ke antrean `dump/`.
+- Modal pengunggahan file batch dengan progress bar real-time.
+- **Queue Filmstrip Carousel**: Bilah antrean bawah yang menampilkan daftar 12 file berikutnya; klik pada item untuk langsung melompat ke file tersebut.
 
-## Menjalankan Aplikasi
+### 5. Kustomisasi Folder & Aturan Shortcut Dinamis
+- Ubah, tambah, atau hapus aturan folder dan tombol pintasan langsung melalui UI modal pengaturan (*Rules*).
+- Kustomisasi warna badge masing-masing folder untuk identifikasi visual yang intuitif.
+- Perubahan disimpan otomatis ke `config.json` dan folder tujuan di `public/` dibuat secara otomatis jika belum ada.
 
-1. Jalankan server:
+### 6. Integrasi OS File Explorer
+- Tombol 1-klik untuk langsung membuka folder `dump` atau folder tujuan apa pun di Windows File Explorer (`explorer.exe`) / macOS Finder / Linux file manager.
 
-    ```bash
-    npm start
-    ```
+### 7. Synthetic Sound FX Engine
+- Efek suara taktil yang disintesis langsung menggunakan Web Audio API saat memindahkan file, menghapus, undo, atau skip (tanpa memerlukan aset file audio eksternal).
+- Tombol toggle untuk mengaktifkan atau membisukan audio kapan saja dengan preferensi tersimpan di `localStorage`.
 
-2. Buka browser dan akses `http://localhost:3000` untuk menggunakan aplikasi.
+### 8. Statistik Sesi & Progress Bar Real-time
+- Indikator progres penyortiran dan counter file tersisa.
+- Modal statistik komprehensif yang menampilkan jumlah file dan penggunaan kapasitas disk per folder tujuan.
 
-## Penggunaan
+---
 
-1. Aplikasi akan menampilkan daftar file yang ada di direktori dump.
-2. Gunakan tombol yang tersedia untuk memindahkan file ke folder yang diinginkan:
-    - `(1) Move to MTS`
-    - `(2) Move to SD`
-    - `(3) Move to sort3`
-    - `(4) Move to sort4`
-    - `(5) Move to sort5`
-    - `(Del) Delete` untuk menghapus file
+## Daftar Pintasan Keyboard (Hotkey Cheat Sheet)
 
-3. Anda juga dapat menggunakan shortcut keyboard untuk memindahkan file:
-    - Tekan `1` untuk memindahkan file ke folder MTS
-    - Tekan `2` untuk memindahkan file ke folder SD
-    - Tekan `3` untuk memindahkan file ke folder sort3
-    - Tekan `4` untuk memindahkan file ke folder sort4
-    - Tekan `5` untuk memindahkan file ke folder sort5
-    - Tekan `Backspace` untuk menghapus file
+| Pintasan Keyboard | Aksi / Fungsi |
+| :--- | :--- |
+| **`1` s/d `9` (atau huruf)** | Pindahkan file aktif ke folder tujuan yang sesuai |
+| **`Del` / `Backspace`** | Hapus file aktif (dapat dibatalkan via Undo) |
+| **`Ctrl + Z` / `Cmd + Z`** | **Undo** aksi pemindahan atau penghapusan terakhir |
+| **`S`** | **Skip**: Lewati file saat ini ke akhir antrean |
+| **`P`** | **Previous**: Kembali ke file yang baru dilewati |
+| **`Space`** | **Play / Pause** pemutaran video atau audio |
+| **`F`** | Buka/Tutup gambar dalam mode **Fullscreen Lightbox** |
+| **`R`** | Putar gambar searah jarum jam (*Rotate 90°*) |
+| **`Esc`** | Menutup modal aktif atau Lightbox |
 
-## Kontribusi
+---
 
-Jika Anda ingin berkontribusi pada proyek ini, silakan fork repositori ini dan buat pull request dengan perubahan yang Anda usulkan.
+## Persyaratan Sistem
+
+- **Node.js** versi 18.0.0 atau yang lebih baru
+- **npm** (Node Package Manager)
+- Sistem Operasi: Windows 10/11, macOS, atau Linux
+
+---
+
+## Instalasi & Menjalankan
+
+1. **Clone repositori ini:**
+   ```bash
+   git clone https://github.com/username/sortirr.git
+   cd sortirr
+   ```
+
+2. **Instal dependensi:**
+   ```bash
+   npm install
+   ```
+
+3. **Jalankan server aplikasi:**
+   ```bash
+   npm start
+   ```
+
+4. **Buka antarmuka di peramban web:**
+   Akses [http://localhost:3000](http://localhost:3000) melalui browser Anda.
+
+---
+
+## Struktur Direktori Proyek
+
+```text
+sortirr/
+├── .cache/              # Cache transkoding video dan thumbnail poster FFmpeg
+├── .trash/              # Buffer penampungan berkas terhapus untuk fitur Undo
+├── config.json          # Konfigurasi tombol pintasan dan direktori folder tujuan
+├── moveFile.js          # Modul pemindahan berkas dengan proteksi tabrakan nama file
+├── package.json         # Konfigurasi dependensi proyek
+├── public/              # Direktori statis dan folder tujuan sortir
+│   ├── dump/            # Direktori sumber berkas yang akan disortir
+│   ├── favicon.svg      # Favicon vektor aplikasi Sortirr
+│   ├── index.html       # Antarmuka web glassmorphic responsif Sortirr
+│   ├── Family/          # Contoh folder tujuan sortir
+│   └── ...              # Folder dinamis lainnya
+├── README.md            # Dokumentasi lengkap proyek
+└── server.js            # Express server, API endpoints, FFmpeg worker, & upload handler
+```
+
+---
 
 ## Lisensi
 
-Proyek ini dilisensikan di bawah lisensi MIT. Lihat file [LICENSE](LICENSE) untuk informasi lebih lanjut.
+Proyek ini dilisensikan di bawah lisensi [MIT](LICENSE).
+
+
