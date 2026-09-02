@@ -33,17 +33,16 @@
       "buildResources": "build"
     },
     "files": [
-      "**/*",
-      "!dist/**/*",
-      "!.git/**/*",
-      "!.trash/**/*",
-      "!.cache/**/*",
-      "!public/dump/**/*",
-      "!public/Family/**/*",
-      "!public/MAN/**/*",
-      "!public/Musik/**/*",
-      "!public/SD/**/*",
-      "!public/Sumbing/**/*"
+      "main.js",
+      "server.js",
+      "moveFile.js",
+      "config.json",
+      "package.json",
+      "public/index.html",
+      "public/favicon.svg",
+      "build/icon.ico",
+      "build/icon.png",
+      "node_modules/**/*"
     ],
     "win": {
       "target": [

@@ -71,12 +71,12 @@ const upload = multer({ storage });
 
 
 const defaultFolders = [
-    { key: "1", name: "Family", color: "#6366f1" },
-    { key: "2", name: "Kuliah", color: "#06b6d4" },
-    { key: "3", name: "prau", color: "#10b981" },
-    { key: "4", name: "Cant See", color: "#f59e0b" },
-    { key: "5", name: "andong", color: "#ec4899" },
-    { key: "6", name: "Merbabu", color: "#8b5cf6" }
+    { key: "1", name: "Work", color: "#6366f1" },
+    { key: "2", name: "Personal", color: "#06b6d4" },
+    { key: "3", name: "Media", color: "#10b981" },
+    { key: "4", name: "Documents", color: "#f59e0b" },
+    { key: "5", name: "Archive", color: "#8b5cf6" },
+    { key: "6", name: "Review", color: "#ec4899" }
 ];
 
 function getFoldersConfig() {

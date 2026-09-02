@@ -1,26 +1,32 @@
 [
   {
     "key": "1",
-    "name": "ya random"
+    "name": "Work",
+    "color": "#6366f1"
   },
   {
     "key": "2",
-    "name": "Family"
+    "name": "Personal",
+    "color": "#06b6d4"
   },
   {
     "key": "3",
-    "name": "SD"
+    "name": "Media",
+    "color": "#10b981"
   },
   {
     "key": "4",
-    "name": "MAN"
+    "name": "Documents",
+    "color": "#f59e0b"
   },
   {
     "key": "5",
-    "name": "Sumbing"
+    "name": "Archive",
+    "color": "#8b5cf6"
   },
   {
     "key": "6",
-    "name": "Musik"
+    "name": "Review",
+    "color": "#ec4899"
   }
 ]
