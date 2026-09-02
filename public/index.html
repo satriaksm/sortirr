@@ -88,7 +88,7 @@
         background: rgba(148, 163, 184, 0.45);
       }
 
-      /* Top Navbar - Balanced & Comfortable */
+      /* Top Navbar - Balanced & Comfortable with Content Constraint */
       header {
         position: sticky;
         top: 0;
@@ -97,12 +97,21 @@
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
         border-bottom: 1px solid var(--border-subtle);
-        padding: 0.5rem 1.25rem;
+        box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
+        height: 54px;
+        display: flex;
+        justify-content: center;
+        width: 100%;
+      }
+
+      .nav-inner {
+        max-width: 1440px;
+        width: 100%;
+        padding: 0 0.85rem;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
-        height: 54px;
+        height: 100%;
       }
 
       .logo-brand {
@@ -786,43 +795,54 @@
         color: var(--text-muted);
       }
 
-      /* Floating Bottom Hotkey Cheatsheet - Low Profile */
+      /* Floating Bottom Hotkey Cheatsheet / HUD */
       .hotkeys-footer {
         position: fixed;
         bottom: 0;
         left: 0;
         right: 0;
-        background: rgba(9, 13, 22, 0.92);
+        background: rgba(9, 13, 22, 0.95);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
         border-top: 1px solid var(--border-subtle);
-        padding: 0.3rem 1rem;
+        padding: 0.35rem 1rem;
         display: flex;
         justify-content: center;
         align-items: center;
-        gap: 0.85rem;
-        flex-wrap: wrap;
         z-index: 40;
-        font-size: 0.68rem;
+        height: 36px;
+        box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.4);
+      }
+
+      .hotkeys-inner {
+        max-width: 1440px;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 1.15rem;
+        flex-wrap: wrap;
+        font-size: 0.76rem;
         color: var(--text-secondary);
-        height: 28px;
       }
 
       .hotkey-pill {
         display: inline-flex;
         align-items: center;
-        gap: 0.25rem;
+        gap: 0.35rem;
+        font-weight: 500;
       }
 
       .kbd {
-        background: rgba(255, 255, 255, 0.08);
-        color: #e2e8f0;
+        background: rgba(255, 255, 255, 0.1);
+        color: #f1f5f9;
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.65rem;
+        font-size: 0.72rem;
         font-weight: 700;
-        padding: 0.08rem 0.3rem;
-        border-radius: 3px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 0.12rem 0.42rem;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
       }
 
       /* Modals */
@@ -1059,47 +1079,49 @@
   <body>
     <!-- Top Header -->
     <header>
-      <div class="logo-brand">
-        <div class="logo-icon">
-          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-          </svg>
-        </div>
-        <div>
-          <h1>Sortirr</h1>
-        </div>
-        <span class="version-tag">PRO v2.0</span>
-      </div>
-
-      <div class="nav-center">
-        <div class="progress-pill">
-          <div class="progress-bar-mini">
-            <div class="progress-bar-fill" id="progressBarFill"></div>
+      <div class="nav-inner">
+        <div class="logo-brand">
+          <div class="logo-icon">
+            <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
           </div>
-          <span id="fileCountBadge">Memuat file...</span>
+          <div>
+            <h1>Sortirr</h1>
+          </div>
+          <span class="version-tag">PRO v2.0</span>
         </div>
-      </div>
 
-      <div class="nav-actions">
-        <button class="btn btn-secondary" id="openUploadBtn" title="Upload file ke Dump folder">
-          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          <span>Upload</span>
-        </button>
-        <button class="btn btn-secondary" id="undoBtn" title="Undo tindakan terakhir (Ctrl+Z)" disabled>
-          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
-          <span>Undo</span>
-        </button>
-        <button class="btn btn-secondary" id="openStatsBtn" title="Lihat Statistik & Folder">
-          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-          <span>Stats</span>
-        </button>
-        <button class="btn btn-secondary btn-icon-only" id="toggleSoundBtn" title="Toggle Efek Suara">
-          <!-- Dynamically set via JS -->
-        </button>
-        <button class="btn btn-primary" id="openSettingsBtn" title="Konfigurasi Folder & Shortcut">
-          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          <span>Rules</span>
-        </button>
+        <div class="nav-center">
+          <div class="progress-pill">
+            <div class="progress-bar-mini">
+              <div class="progress-bar-fill" id="progressBarFill"></div>
+            </div>
+            <span id="fileCountBadge">Memuat file...</span>
+          </div>
+        </div>
+
+        <div class="nav-actions">
+          <button class="btn btn-secondary" id="openUploadBtn" title="Upload file ke Dump folder">
+            <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <span>Upload</span>
+          </button>
+          <button class="btn btn-secondary" id="undoBtn" title="Undo tindakan terakhir (Ctrl+Z)" disabled>
+            <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+            <span>Undo</span>
+          </button>
+          <button class="btn btn-secondary" id="openStatsBtn" title="Lihat Statistik & Folder">
+            <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            <span>Stats</span>
+          </button>
+          <button class="btn btn-secondary btn-icon-only" id="toggleSoundBtn" title="Toggle Efek Suara">
+            <!-- Dynamically set via JS -->
+          </button>
+          <button class="btn btn-primary" id="openSettingsBtn" title="Konfigurasi Folder & Shortcut">
+            <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span>Rules</span>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -1121,16 +1143,18 @@
       </div>
     </main>
 
-    <!-- Floating Hotkey Footer -->
+    <!-- Floating Hotkey Footer / HUD -->
     <footer class="hotkeys-footer">
-      <div class="hotkey-pill"><span class="kbd">1 - 9</span> Pindah Folder</div>
-      <div class="hotkey-pill"><span class="kbd">Del</span> / <span class="kbd">⌫</span> Hapus File</div>
-      <div class="hotkey-pill"><span class="kbd">Ctrl+Z</span> Undo</div>
-      <div class="hotkey-pill"><span class="kbd">S</span> Skip / Next</div>
-      <div class="hotkey-pill"><span class="kbd">P</span> Previous</div>
-      <div class="hotkey-pill"><span class="kbd">Space</span> Play/Pause</div>
-      <div class="hotkey-pill"><span class="kbd">F</span> Fullscreen</div>
-      <div class="hotkey-pill"><span class="kbd">R</span> Rotate Foto</div>
+      <div class="hotkeys-inner">
+        <div class="hotkey-pill"><span class="kbd">1 - 9</span> Pindah Folder</div>
+        <div class="hotkey-pill"><span class="kbd">Del</span> / <span class="kbd">⌫</span> Hapus File</div>
+        <div class="hotkey-pill"><span class="kbd">Ctrl+Z</span> Undo</div>
+        <div class="hotkey-pill"><span class="kbd">S</span> Skip / Next</div>
+        <div class="hotkey-pill"><span class="kbd">P</span> Previous</div>
+        <div class="hotkey-pill"><span class="kbd">Space</span> Play/Pause</div>
+        <div class="hotkey-pill"><span class="kbd">F</span> Fullscreen</div>
+        <div class="hotkey-pill"><span class="kbd">R</span> Rotate Foto</div>
+      </div>
     </footer>
 
     <!-- Fullscreen Dropzone Overlay -->
