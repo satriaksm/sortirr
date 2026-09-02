@@ -8,6 +8,9 @@ const multer = require('multer');
 let ffmpegPath = null;
 try {
     ffmpegPath = require('ffmpeg-static');
+    if (process.versions && process.versions.electron && ffmpegPath && ffmpegPath.includes('app.asar')) {
+        ffmpegPath = ffmpegPath.replace('app.asar', 'app.asar.unpacked');
+    }
     console.log('FFmpeg binary available at:', ffmpegPath);
 } catch (e) {
     console.warn('ffmpeg-static module not available:', e.message);
@@ -17,28 +20,34 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(express.json());
-app.use(express.static('public'));
+
+// Determine storage directory (for dump, sorted folders, config, cache, trash)
+// Priority: SORTIRR_DATA_DIR env var > Documents/Sortirr (in Electron) > local folder (self-hosted fallback)
+const isElectron = !!(process.versions && process.versions.electron);
+const dataDir = process.env.SORTIRR_DATA_DIR || (isElectron 
+    ? path.join(process.env.USERPROFILE || process.env.HOME || process.env.APPDATA, 'Documents', 'Sortirr')
+    : null);
+
+const storageRoot = dataDir || path.join(__dirname, 'public');
+const publicDir = path.join(__dirname, 'public'); // for static HTML, CSS, JS web assets
+
+const dumpDir = path.join(storageRoot, 'dump');
+const cacheDir = dataDir ? path.join(dataDir, '.cache') : path.join(__dirname, '.cache');
+const trashDir = dataDir ? path.join(dataDir, '.trash') : path.join(__dirname, '.trash');
+const configPath = dataDir ? path.join(dataDir, 'config.json') : path.join(__dirname, 'config.json');
+
+function getCategoryPath(categoryName) {
+    return path.join(storageRoot, categoryName);
+}
 
 // Ensure required directories exist
-const publicDir = path.join(__dirname, 'public');
-if (!fs.existsSync(publicDir)) {
-    fs.mkdirSync(publicDir, { recursive: true });
-}
+[storageRoot, dumpDir, cacheDir, trashDir].forEach(dir => {
+    if (!fs.existsSync(dir)) {
+        try { fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
+    }
+});
 
-const dumpDir = path.join(__dirname, 'public', 'dump');
-if (!fs.existsSync(dumpDir)) {
-    fs.mkdirSync(dumpDir, { recursive: true });
-}
-
-const cacheDir = path.join(__dirname, '.cache');
-if (!fs.existsSync(cacheDir)) {
-    fs.mkdirSync(cacheDir, { recursive: true });
-}
-
-const trashDir = path.join(__dirname, '.trash');
-if (!fs.existsSync(trashDir)) {
-    fs.mkdirSync(trashDir, { recursive: true });
-}
+app.use(express.static(publicDir));
 
 // Multer storage for uploading files into public/dump/
 const storage = multer.diskStorage({
@@ -60,8 +69,6 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// Path to folder configuration JSON
-const configPath = path.join(__dirname, 'config.json');
 
 const defaultFolders = [
     { key: "1", name: "Family", color: "#6366f1" },
@@ -254,7 +261,7 @@ app.get('/api/folders', (req, res) => {
     const folders = getFoldersConfig();
     const result = folders.map(f => {
         let count = 0;
-        const targetDir = path.join(__dirname, 'public', f.name);
+        const targetDir = getCategoryPath(f.name);
         if (fs.existsSync(targetDir)) {
             try {
                 count = fs.readdirSync(targetDir).filter(x => !x.startsWith('.')).length;
@@ -280,7 +287,7 @@ app.post('/api/folders', (req, res) => {
         fs.writeFileSync(configPath, JSON.stringify(folders, null, 2), 'utf8');
         folders.forEach(item => {
             if (item.name) {
-                const folderDir = path.join(__dirname, 'public', item.name);
+                const folderDir = getCategoryPath(item.name);
                 if (!fs.existsSync(folderDir)) {
                     fs.mkdirSync(folderDir, { recursive: true });
                 }
@@ -314,7 +321,7 @@ app.post('/api/undo', async (req, res) => {
     const lastAction = actionHistory.pop();
     try {
         if (lastAction.type === 'move') {
-            const movedPath = path.join(__dirname, 'public', lastAction.toFolder, lastAction.finalName);
+            const movedPath = path.join(getCategoryPath(lastAction.toFolder), lastAction.finalName);
             const restorePath = path.join(dumpDir, lastAction.originalName);
 
             if (!fs.existsSync(movedPath)) {
@@ -391,7 +398,7 @@ app.post('/delete-file', async (req, res) => {
 app.post('/move-file', async (req, res) => {
     const { fileName, folder } = req.body;
     try {
-        const result = await moveFile(fileName, folder);
+        const result = await moveFile(fileName, folder, storageRoot);
         removeFileCache(fileName);
 
         // Record in undo stack
@@ -412,12 +419,12 @@ app.post('/move-file', async (req, res) => {
 // POST /api/open-folder - Reveal folder in OS File Explorer (Windows/macOS/Linux)
 app.post('/api/open-folder', (req, res) => {
     const { folder } = req.body;
-    let targetPath = publicDir;
+    let targetPath = storageRoot;
 
     if (folder === 'dump') {
         targetPath = dumpDir;
     } else if (folder) {
-        targetPath = path.join(publicDir, folder);
+        targetPath = getCategoryPath(folder);
     }
 
     if (!fs.existsSync(targetPath)) {
@@ -580,7 +587,7 @@ app.get('/api/stats', (req, res) => {
 
         const folders = getFoldersConfig();
         const folderStats = folders.map(f => {
-            const folderPath = path.join(publicDir, f.name);
+            const folderPath = getCategoryPath(f.name);
             let count = 0;
             let size = 0;
             if (fs.existsSync(folderPath)) {
@@ -612,15 +619,39 @@ app.get('/api/stats', (req, res) => {
             dumpSize,
             folders: folderStats,
             canUndo: actionHistory.length > 0,
-            lastAction: actionHistory[actionHistory.length - 1] || null
+            lastAction: actionHistory[actionHistory.length - 1] || null,
+            storageRoot,
+            dumpDir,
+            isDesktop: isElectron
         });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
 });
 
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
-    console.log(`Serving static files from ${publicDir}`);
-    console.log(`Dump directory at ${dumpDir}`);
-});
+// Start server function for modular launch (e.g. from Electron)
+function startServer(customPort, customDataDir) {
+    if (customDataDir) {
+        process.env.SORTIRR_DATA_DIR = customDataDir;
+    }
+    const listenPort = customPort !== undefined ? customPort : (process.env.PORT || 3000);
+    return new Promise((resolve, reject) => {
+        const server = app.listen(listenPort, '127.0.0.1', () => {
+            const actualPort = server.address().port;
+            console.log(`Server running at http://127.0.0.1:${actualPort}`);
+            console.log(`Serving static files from ${publicDir}`);
+            console.log(`Storage root at ${storageRoot}`);
+            console.log(`Dump directory at ${dumpDir}`);
+            resolve({ server, port: actualPort });
+        });
+        server.on('error', reject);
+    });
+}
+
+if (require.main === module) {
+    startServer(process.env.PORT || 3000).catch(err => {
+        console.error('Failed to start server:', err);
+    });
+}
+
+module.exports = { app, startServer, storageRoot, dumpDir, getFoldersConfig };

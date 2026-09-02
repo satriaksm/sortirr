@@ -1,4 +1,11 @@
 node_modules/
 .cache/
+.trash/
+dist/
+build/*.ps1
+Sortirr-Data/
+
+# Ignore dynamic user files in public except web assets
 public/*
 !public/index.html
+!public/favicon.svg

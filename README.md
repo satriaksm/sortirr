@@ -66,7 +66,24 @@ Sortirr dilengkapi dengan berbagai fitur produktivitas tingkat lanjut yang diran
 
 ---
 
-## Persyaratan Sistem
+## ⚡ Unduh Aplikasi Windows Desktop (.exe)
+
+Bagi pengguna umum di sistem operasi Windows, Anda **tidak perlu** menginstal Node.js, Git, Laragon, maupun membuka terminal. Anda dapat langsung mengunduh file aplikasi siap pakai dari halaman [GitHub Releases](https://github.com/satriaksm/sortirr/releases):
+
+| Format Rilis | Deskripsi | Rekomendasi Penggunaan |
+| :--- | :--- | :--- |
+| **`Sortirr-Setup-1.0.0.exe`** | **Installer Resmi Windows** lengkap dengan wizard instalasi, shortcut Desktop, Start Menu, dan uninstaller. | Untuk pemakaian sehari-hari di PC / Laptop utama Anda. |
+| **`Sortirr-1.0.0-Portable.exe`** | **Versi Portable (Standalone)**, langsung klik dan jalan tanpa instalasi. | Praktis dibawa di flashdisk/harddisk eksternal dan bisa dipakai di komputer mana saja. |
+
+> [!TIP]
+> **Lokasi Penyimpanan Data:**
+> - **Versi Installer:** Data sortir, folder `dump`, dan konfigurasi disimpan di folder aman: `Dokumen/Sortirr/`.
+> - **Versi Portable:** Data disimpan di dalam folder `Sortirr-Data/` di samping file executable Portable tersebut.
+> - Anda dapat membuka folder data dan folder dump kapan saja langsung dari menu aplikasi (**File -> Buka Folder Dump**).
+
+---
+
+## Persyaratan Sistem (Untuk Pengembang / Self-Hosted)
 
 - **Node.js** versi 18.0.0 atau yang lebih baru
 - **npm** (Node Package Manager)
@@ -74,11 +91,11 @@ Sortirr dilengkapi dengan berbagai fitur produktivitas tingkat lanjut yang diran
 
 ---
 
-## Instalasi & Menjalankan
+## Instalasi & Menjalankan (Mode Pengembang)
 
 1. **Clone repositori ini:**
    ```bash
-   git clone https://github.com/username/sortirr.git
+   git clone https://github.com/satriaksm/sortirr.git
    cd sortirr
    ```
 
@@ -87,13 +104,22 @@ Sortirr dilengkapi dengan berbagai fitur produktivitas tingkat lanjut yang diran
    npm install
    ```
 
-3. **Jalankan server aplikasi:**
-   ```bash
-   npm start
-   ```
+3. **Jalankan Aplikasi:**
+   - **Mode Desktop App (Electron):**
+     ```bash
+     npm run desktop
+     ```
+   - **Mode Web Self-Hosted (Browser):**
+     ```bash
+     npm start
+     ```
+     Lalu buka [http://localhost:3000](http://localhost:3000) di browser Anda.
 
-4. **Buka antarmuka di peramban web:**
-   Akses [http://localhost:3000](http://localhost:3000) melalui browser Anda.
+4. **Build Executable Windows (.exe):**
+   ```bash
+   npm run dist
+   ```
+   *Hasil kompilasi (`Sortirr Setup 1.0.0.exe` dan `Sortirr-1.0.0-Portable.exe`) akan otomatis tersimpan di folder `dist/`.*
 
 ---
 

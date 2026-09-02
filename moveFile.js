@@ -2,12 +2,19 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * Move a file from public/dump/ to public/<folder>/ safely.
+ * Move a file from dump directory to target category folder safely.
  * If a file with the same name already exists at destination, generates a unique non-conflicting name.
  */
-function moveFile(fileName, folder) {
-    const sourcePath = path.join(__dirname, 'public', 'dump', fileName);
-    const folderPath = path.join(__dirname, 'public', folder);
+function moveFile(fileName, folder, customDataDir) {
+    const dataDir = customDataDir || process.env.SORTIRR_DATA_DIR;
+
+    const sourcePath = dataDir 
+        ? path.join(dataDir, 'dump', fileName)
+        : path.join(__dirname, 'public', 'dump', fileName);
+
+    const folderPath = dataDir 
+        ? path.join(dataDir, folder)
+        : path.join(__dirname, 'public', folder);
 
     return new Promise((resolve, reject) => {
         // Check if source file exists
