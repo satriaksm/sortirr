@@ -17,6 +17,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # TAMBAHKAN STEP INI UNTUK UPDATE VERSI OTOMATIS
+      - name: Set version from git tag
+        uses: grosse/action-git-version@v1 # atau gunakan teknik di bawah jika ingin tanpa action tambahan
+        # Alternatif paling aman tanpa action tambahan: gunakan script node/bash kecil di bawah
+      
+      # (Alternatif Inline Script Node.js tanpa plugin tambahan):
+      - name: Update package.json version
+        shell: node
+        run: |
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          // Mengambil versi dari ref git, contoh: refs/tags/v1.0.1 -> 1.0.1
+          const tag = process.env.GITHUB_REF_NAME || '';
+          const version = tag.startsWith('v') ? tag.slice(1) : tag;
+          if (version) {
+            pkg.version = version;
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+            console.log(`Updated package.json version to: ${version}`);
+          }
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
