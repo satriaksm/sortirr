@@ -17,25 +17,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. STEP UTAMA: Ubah versi di package.json secara dinamis berdasarkan Git Tag
-      - name: Update package.json version from Git Tag
-        shell: node
-        run: |
-          const fs = require('fs');
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          
-          // Mengambil nama tag (contoh: refs/tags/v1.0.1 menjadi v1.0.1)
-          const tag = process.env.GITHUB_REF_NAME || '';
-          const version = tag.startsWith('v') ? tag.slice(1) : tag;
-          
-          if (version) {
-            pkg.version = version;
-            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
-            console.log(`Berhasil mengubah versi package.json menjadi: ${version}`);
-          } else {
-            console.log("Tidak ada tag ditemukan, menggunakan versi bawaan package.json.");
-          }
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -45,7 +26,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # 2. SAAT DIJALANKAN, ELECTRON-BUILDER AKAN MEMBACA VERSI BARU DARI PACKAGE.JSON
       - name: Build Windows Executables (Setup & Portable)
         run: npm run dist
         env:
