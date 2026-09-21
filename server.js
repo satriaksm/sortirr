@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const multer = require('multer');
+const crypto = require('crypto');
 
 let ffmpegPath = null;
 try {
@@ -24,6 +25,7 @@ app.use(express.json());
 // Determine storage directory (for dump, sorted folders, config, cache, trash)
 // Priority: SORTIRR_DATA_DIR env var > Documents/Sortirr (in Electron) > local folder (self-hosted fallback)
 const isElectron = !!(process.versions && process.versions.electron);
+const electron = isElectron ? require('electron') : null;
 const dataDir = process.env.SORTIRR_DATA_DIR || (isElectron 
     ? path.join(process.env.USERPROFILE || process.env.HOME || process.env.APPDATA, 'Documents', 'Sortirr')
     : null);
@@ -35,12 +37,156 @@ const dumpDir = path.join(storageRoot, 'dump');
 const cacheDir = dataDir ? path.join(dataDir, '.cache') : path.join(__dirname, '.cache');
 const trashDir = dataDir ? path.join(dataDir, '.trash') : path.join(__dirname, '.trash');
 const configPath = dataDir ? path.join(dataDir, 'config.json') : path.join(__dirname, 'config.json');
+const settingsPath = dataDir ? path.join(dataDir, 'settings.json') : path.join(__dirname, 'settings.json');
 
 function getCategoryPath(categoryName) {
     return path.join(storageRoot, categoryName);
 }
 
-// Ensure required directories exist
+// Settings and Dynamic Source Folder State
+function loadSettings() {
+    try {
+        if (fs.existsSync(settingsPath)) {
+            const parsed = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+            if (typeof parsed === 'object' && parsed !== null) {
+                return {
+                    currentSourceFolder: parsed.currentSourceFolder || null,
+                    recentFolders: Array.isArray(parsed.recentFolders) ? parsed.recentFolders : []
+                };
+            }
+        }
+    } catch (e) {
+        console.error('Error reading settings.json:', e.message);
+    }
+    return { currentSourceFolder: null, recentFolders: [] };
+}
+
+function saveSettings(settings) {
+    try {
+        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
+    } catch (e) {
+        console.error('Error saving settings.json:', e.message);
+    }
+}
+
+const initialSettings = loadSettings();
+let currentSourceFolder = initialSettings.currentSourceFolder;
+if (currentSourceFolder && !fs.existsSync(currentSourceFolder)) {
+    console.warn(`Saved source folder "${currentSourceFolder}" does not exist. Falling back to default dump folder.`);
+    currentSourceFolder = null;
+    saveSettings({ ...initialSettings, currentSourceFolder: null });
+}
+
+function getSourceDir() {
+    if (currentSourceFolder && fs.existsSync(currentSourceFolder)) {
+        return currentSourceFolder;
+    }
+    return dumpDir;
+}
+
+function getSourceInfo() {
+    const activeDir = getSourceDir();
+    const isDefault = path.resolve(activeDir) === path.resolve(dumpDir);
+    return {
+        path: activeDir,
+        name: isDefault ? 'dump (Default)' : path.basename(activeDir),
+        isDefault
+    };
+}
+
+function setSourceDir(newPath) {
+    if (!newPath || typeof newPath !== 'string') {
+        throw new Error('Path folder tidak valid');
+    }
+    const resolvedPath = path.resolve(newPath);
+    if (!fs.existsSync(resolvedPath)) {
+        throw new Error(`Folder "${newPath}" tidak ditemukan di komputer`);
+    }
+    const stat = fs.statSync(resolvedPath);
+    if (!stat.isDirectory()) {
+        throw new Error(`Path "${newPath}" bukan merupakan sebuah folder`);
+    }
+
+    const isDefault = path.resolve(resolvedPath) === path.resolve(dumpDir);
+    currentSourceFolder = isDefault ? null : resolvedPath;
+
+    const settings = loadSettings();
+    settings.currentSourceFolder = currentSourceFolder;
+
+    if (!Array.isArray(settings.recentFolders)) {
+        settings.recentFolders = [];
+    }
+
+    if (!isDefault) {
+        // Remove existing occurrence and unshift
+        settings.recentFolders = settings.recentFolders.filter(p => path.resolve(p) !== path.resolve(resolvedPath));
+        settings.recentFolders.unshift(resolvedPath);
+        if (settings.recentFolders.length > 8) {
+            settings.recentFolders = settings.recentFolders.slice(0, 8);
+        }
+    }
+
+    saveSettings(settings);
+    return getSourceInfo();
+}
+
+function resetSourceToDump() {
+    currentSourceFolder = null;
+    const settings = loadSettings();
+    settings.currentSourceFolder = null;
+    saveSettings(settings);
+    return getSourceInfo();
+}
+
+// Native OS Folder Picker
+async function pickFolderNative() {
+    if (isElectron && electron && electron.dialog) {
+        const focusedWindow = electron.BrowserWindow ? electron.BrowserWindow.getFocusedWindow() : null;
+        const result = await electron.dialog.showOpenDialog(focusedWindow || undefined, {
+            title: 'Pilih Folder untuk Disortir',
+            defaultPath: getSourceDir(),
+            properties: ['openDirectory', 'dontAddToRecent']
+        });
+        if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+            return { canceled: true };
+        }
+        return { canceled: false, folderPath: result.filePaths[0] };
+    }
+
+    // Windows PowerShell fallback
+    if (process.platform === 'win32') {
+        return new Promise((resolve) => {
+            const psScript = `
+Add-Type -AssemblyName System.Windows.Forms
+$dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+$dialog.Description = 'Pilih Folder untuk Disortir dengan Sortirr'
+$dialog.ShowNewFolderButton = $true
+if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+    Write-Output $dialog.SelectedPath
+}
+`;
+            const ps = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', psScript]);
+            let stdout = '';
+            ps.stdout.on('data', (d) => { stdout += d.toString(); });
+            ps.on('close', (code) => {
+                const selected = stdout.trim();
+                if (code === 0 && selected && fs.existsSync(selected)) {
+                    resolve({ canceled: false, folderPath: selected });
+                } else {
+                    resolve({ canceled: true });
+                }
+            });
+            ps.on('error', (err) => {
+                console.error('PowerShell folder dialog error:', err);
+                resolve({ canceled: true });
+            });
+        });
+    }
+
+    return { canceled: true, unsupported: true };
+}
+
+// Ensure required base directories exist
 [storageRoot, dumpDir, cacheDir, trashDir].forEach(dir => {
     if (!fs.existsSync(dir)) {
         try { fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
@@ -49,18 +195,22 @@ function getCategoryPath(categoryName) {
 
 app.use(express.static(publicDir));
 
-// Multer storage for uploading files into public/dump/
+// Multer storage for uploading files into active source directory
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, dumpDir);
+        const targetDir = getSourceDir();
+        if (!fs.existsSync(targetDir)) {
+            try { fs.mkdirSync(targetDir, { recursive: true }); } catch (_) {}
+        }
+        cb(null, targetDir);
     },
     filename: function (req, file, cb) {
-        // Preserve original file name, or resolve duplicate if needed
+        const targetDir = getSourceDir();
         let targetName = file.originalname;
         let counter = 1;
         const ext = path.extname(targetName);
         const base = path.basename(targetName, ext);
-        while (fs.existsSync(path.join(dumpDir, targetName))) {
+        while (fs.existsSync(path.join(targetDir, targetName))) {
             targetName = `${base}_${counter}${ext}`;
             counter++;
         }
@@ -68,7 +218,6 @@ const storage = multer.diskStorage({
     }
 });
 const upload = multer({ storage });
-
 
 const defaultFolders = [
     { key: "1", name: "Work", color: "#6366f1" },
@@ -98,15 +247,26 @@ function getFoldersConfig() {
     }
 }
 
+// Cache Key Helper (avoids collisions for files with identical names across different folders)
+function getCacheKey(filePath) {
+    const hash = crypto.createHash('md5').update(path.resolve(filePath)).digest('hex').slice(0, 8);
+    return `${hash}_${path.basename(filePath)}`;
+}
+
 // Helper: Clean up preview cache when a file is moved or deleted
-function removeFileCache(filename) {
+function removeFileCache(filePathOrName) {
     try {
-        const cacheMp4 = path.join(cacheDir, `${filename}.mp4`);
-        const cacheJpg = path.join(cacheDir, `${filename}.jpg`);
-        if (fs.existsSync(cacheMp4)) fs.unlinkSync(cacheMp4);
-        if (fs.existsSync(cacheJpg)) fs.unlinkSync(cacheJpg);
+        const base = path.basename(filePathOrName);
+        if (fs.existsSync(cacheDir)) {
+            const files = fs.readdirSync(cacheDir);
+            for (const f of files) {
+                if (f === `${base}.mp4` || f === `${base}.jpg` || f.endsWith(`_${base}.mp4`) || f.endsWith(`_${base}.jpg`)) {
+                    try { fs.unlinkSync(path.join(cacheDir, f)); } catch (_) {}
+                }
+            }
+        }
     } catch (e) {
-        console.error(`Error cleaning cache for ${filename}:`, e.message);
+        console.error(`Error cleaning cache for ${filePathOrName}:`, e.message);
     }
 }
 
@@ -234,14 +394,16 @@ async function preCacheThumbnails(files) {
     if (isPreCaching || !ffmpegPath) return;
     isPreCaching = true;
     const videoExtensions = ['.mov', '.mp4', '.mkv', '.avi', '.webm', '.m4v', '.3gp', '.flv', '.wmv', '.ts'];
+    const activeDir = getSourceDir();
     
     try {
         for (const item of files) {
             const file = typeof item === 'object' ? item.name : item;
             const ext = path.extname(file).toLowerCase();
             if (videoExtensions.includes(ext)) {
-                const thumbPath = path.join(cacheDir, `${file}.jpg`);
-                const sourcePath = path.join(dumpDir, file);
+                const sourcePath = path.join(activeDir, file);
+                const thumbName = `${getCacheKey(sourcePath)}.jpg`;
+                const thumbPath = path.join(cacheDir, thumbName);
                 if (!fs.existsSync(thumbPath) && fs.existsSync(sourcePath)) {
                     try {
                         await generateThumbnail(sourcePath, thumbPath);
@@ -255,6 +417,83 @@ async function preCacheThumbnails(files) {
         isPreCaching = false;
     }
 }
+
+// GET /api/source-folder - Get active source folder & recent folders
+app.get('/api/source-folder', (req, res) => {
+    const settings = loadSettings();
+    const current = getSourceInfo();
+    const validRecent = (settings.recentFolders || [])
+        .filter(p => fs.existsSync(p))
+        .map(p => ({
+            path: p,
+            name: path.basename(p),
+            isCurrent: path.resolve(p) === path.resolve(current.path)
+        }));
+
+    res.json({
+        current,
+        defaultDump: dumpDir,
+        recentFolders: validRecent
+    });
+});
+
+// POST /api/set-source-folder - Set active source folder manually
+app.post('/api/set-source-folder', (req, res) => {
+    const { folderPath } = req.body;
+    try {
+        if (!folderPath || folderPath === 'dump' || path.resolve(folderPath) === path.resolve(dumpDir)) {
+            const current = resetSourceToDump();
+            return res.json({
+                message: 'Folder sumber dialihkan kembali ke default (dump)',
+                current
+            });
+        }
+
+        const current = setSourceDir(folderPath);
+        res.json({
+            message: `Folder sumber diubah ke "${current.name}"`,
+            current
+        });
+    } catch (err) {
+        res.status(400).json({ message: err.message });
+    }
+});
+
+// POST /api/select-source-folder - Open OS native folder picker dialog
+app.post('/api/select-source-folder', async (req, res) => {
+    try {
+        const dialogResult = await pickFolderNative();
+        if (dialogResult.canceled || !dialogResult.folderPath) {
+            return res.json({ canceled: true, current: getSourceInfo() });
+        }
+
+        const current = setSourceDir(dialogResult.folderPath);
+        res.json({
+            canceled: false,
+            message: `Folder sumber dipilih: "${current.name}"`,
+            current
+        });
+    } catch (err) {
+        console.error('Error in select-source-folder:', err);
+        res.status(500).json({ message: 'Gagal memilih folder: ' + err.message });
+    }
+});
+
+// POST /api/remove-recent-folder - Remove a folder from recent list
+app.post('/api/remove-recent-folder', (req, res) => {
+    const { folderPath } = req.body;
+    if (!folderPath) {
+        return res.status(400).json({ message: 'folderPath required' });
+    }
+
+    const settings = loadSettings();
+    settings.recentFolders = (settings.recentFolders || []).filter(
+        p => path.resolve(p) !== path.resolve(folderPath)
+    );
+    saveSettings(settings);
+
+    res.json({ message: 'Folder dihapus dari riwayat' });
+});
 
 // GET /api/folders with live counts
 app.get('/api/folders', (req, res) => {
@@ -300,17 +539,33 @@ app.post('/api/folders', (req, res) => {
     }
 });
 
-// POST /api/upload - Upload files to dump directory
+// POST /api/upload - Upload files to active source directory
 app.post('/api/upload', upload.array('files', 100), (req, res) => {
     if (!req.files || req.files.length === 0) {
         return res.status(400).json({ message: 'No files uploaded' });
     }
     const uploadedNames = req.files.map(f => f.filename);
+    const source = getSourceInfo();
     res.json({
-        message: `Successfully uploaded ${req.files.length} file(s)`,
-        files: uploadedNames
+        message: `Berhasil mengunggah ${req.files.length} berkas ke "${source.name}"`,
+        files: uploadedNames,
+        source
     });
 });
+
+// Cross-device safe move helper
+function safeMoveSync(src, dest) {
+    try {
+        fs.renameSync(src, dest);
+    } catch (err) {
+        if (err.code === 'EXDEV') {
+            fs.copyFileSync(src, dest);
+            fs.unlinkSync(src);
+        } else {
+            throw err;
+        }
+    }
+}
 
 // POST /api/undo - Undo last move or delete action
 app.post('/api/undo', async (req, res) => {
@@ -320,18 +575,22 @@ app.post('/api/undo', async (req, res) => {
 
     const lastAction = actionHistory.pop();
     try {
+        const restoreDir = (lastAction.sourceDir && fs.existsSync(lastAction.sourceDir))
+            ? lastAction.sourceDir
+            : getSourceDir();
+
         if (lastAction.type === 'move') {
             const movedPath = path.join(getCategoryPath(lastAction.toFolder), lastAction.finalName);
-            const restorePath = path.join(dumpDir, lastAction.originalName);
+            const restorePath = path.join(restoreDir, lastAction.originalName);
 
             if (!fs.existsSync(movedPath)) {
                 return res.status(404).json({ message: `File "${lastAction.finalName}" tidak ditemukan di folder "${lastAction.toFolder}"` });
             }
 
-            // Restore back to dump
-            fs.renameSync(movedPath, restorePath);
-            removeFileCache(lastAction.originalName);
-            removeFileCache(lastAction.finalName);
+            // Restore back to original source folder (safe across drives)
+            safeMoveSync(movedPath, restorePath);
+            removeFileCache(movedPath);
+            removeFileCache(restorePath);
 
             return res.json({
                 message: `Berhasil mengembalikan "${lastAction.originalName}" dari folder "${lastAction.toFolder}"`,
@@ -340,13 +599,13 @@ app.post('/api/undo', async (req, res) => {
             });
         } else if (lastAction.type === 'delete') {
             const trashPath = lastAction.trashPath;
-            const restorePath = path.join(dumpDir, lastAction.originalName);
+            const restorePath = path.join(restoreDir, lastAction.originalName);
 
             if (!fs.existsSync(trashPath)) {
                 return res.status(404).json({ message: `File yang dihapus "${lastAction.originalName}" tidak ditemukan di tempat sampah` });
             }
 
-            fs.renameSync(trashPath, restorePath);
+            safeMoveSync(trashPath, restorePath);
             return res.json({
                 message: `Berhasil memulihkan file "${lastAction.originalName}" yang sempat dihapus`,
                 restoredFile: lastAction.originalName,
@@ -365,25 +624,27 @@ app.post('/delete-file', async (req, res) => {
     if (!fileName) {
         return res.status(400).json({ message: 'Filename required' });
     }
-    const filePath = path.join(dumpDir, fileName);
+    const activeSourceDir = getSourceDir();
+    const filePath = path.join(activeSourceDir, fileName);
 
     try {
         if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ message: `File "${fileName}" not found` });
+            return res.status(404).json({ message: `File "${fileName}" not found in source directory` });
         }
 
         const trashFileName = `${Date.now()}_${fileName}`;
         const targetTrashPath = path.join(trashDir, trashFileName);
 
-        // Move to .trash instead of hard unlinking
-        fs.renameSync(filePath, targetTrashPath);
-        removeFileCache(fileName);
+        // Move to .trash instead of hard unlinking (safe across drives)
+        safeMoveSync(filePath, targetTrashPath);
+        removeFileCache(filePath);
 
         // Push to undo stack
         pushUndoAction({
             type: 'delete',
             originalName: fileName,
             trashPath: targetTrashPath,
+            sourceDir: activeSourceDir,
             timestamp: Date.now()
         });
 
@@ -397,16 +658,18 @@ app.post('/delete-file', async (req, res) => {
 // POST /move-file
 app.post('/move-file', async (req, res) => {
     const { fileName, folder } = req.body;
+    const activeSourceDir = getSourceDir();
     try {
-        const result = await moveFile(fileName, folder, storageRoot);
-        removeFileCache(fileName);
+        const result = await moveFile(fileName, folder, storageRoot, activeSourceDir);
+        removeFileCache(path.join(activeSourceDir, fileName));
 
-        // Record in undo stack
+        // Record in undo stack with sourceDir
         pushUndoAction({
             type: 'move',
             originalName: result.originalName,
             finalName: result.finalName,
             toFolder: folder,
+            sourceDir: activeSourceDir,
             timestamp: Date.now()
         });
 
@@ -418,10 +681,14 @@ app.post('/move-file', async (req, res) => {
 
 // POST /api/open-folder - Reveal folder in OS File Explorer (Windows/macOS/Linux)
 app.post('/api/open-folder', (req, res) => {
-    const { folder } = req.body;
+    const { folder, path: customPath } = req.body;
     let targetPath = storageRoot;
 
-    if (folder === 'dump') {
+    if (customPath && typeof customPath === 'string') {
+        targetPath = customPath;
+    } else if (folder === 'source' || folder === 'current') {
+        targetPath = getSourceDir();
+    } else if (folder === 'dump') {
         targetPath = dumpDir;
     } else if (folder) {
         targetPath = getCategoryPath(folder);
@@ -431,7 +698,7 @@ app.post('/api/open-folder', (req, res) => {
         try {
             fs.mkdirSync(targetPath, { recursive: true });
         } catch (e) {
-            return res.status(400).json({ message: 'Directory does not exist' });
+            return res.status(400).json({ message: `Directory does not exist: ${targetPath}` });
         }
     }
 
@@ -446,7 +713,7 @@ app.post('/api/open-folder', (req, res) => {
         } else {
             spawn('xdg-open', [targetPath], { detached: true, stdio: 'ignore' });
         }
-        res.json({ message: `Opened ${folder || 'root'} folder in file explorer` });
+        res.json({ message: `Membuka folder "${path.basename(targetPath)}" di file explorer` });
     } catch (err) {
         res.status(500).json({ message: 'Failed to open file explorer: ' + err.message });
     }
@@ -454,8 +721,9 @@ app.post('/api/open-folder', (req, res) => {
 
 // Direct file serving (for downloads or native previews)
 app.get('/file/:filename', (req, res) => {
-    const filename = req.params.filename;
-    const filePath = path.join(dumpDir, filename);
+    const filename = path.basename(req.params.filename);
+    const sourceDir = getSourceDir();
+    const filePath = path.join(sourceDir, filename);
 
     if (fs.existsSync(filePath)) {
         res.sendFile(filePath);
@@ -466,14 +734,16 @@ app.get('/file/:filename', (req, res) => {
 
 // Instant video thumbnail endpoint
 app.get('/api/video-thumbnail/:filename', async (req, res) => {
-    const filename = req.params.filename;
-    const filePath = path.join(dumpDir, filename);
+    const filename = path.basename(req.params.filename);
+    const sourceDir = getSourceDir();
+    const filePath = path.join(sourceDir, filename);
 
     if (!fs.existsSync(filePath)) {
         return res.status(404).send('File not found');
     }
 
-    const thumbPath = path.join(cacheDir, `${filename}.jpg`);
+    const thumbName = `${getCacheKey(filePath)}.jpg`;
+    const thumbPath = path.join(cacheDir, thumbName);
     if (fs.existsSync(thumbPath)) {
         return res.sendFile(thumbPath);
     }
@@ -493,8 +763,9 @@ app.get('/api/video-thumbnail/:filename', async (req, res) => {
 
 // Fast web-compatible video preview endpoint (transcodes MOV/HEVC/MKV to H.264 MP4 with seeking)
 app.get('/api/video-preview/:filename', async (req, res) => {
-    const filename = req.params.filename;
-    const filePath = path.join(dumpDir, filename);
+    const filename = path.basename(req.params.filename);
+    const sourceDir = getSourceDir();
+    const filePath = path.join(sourceDir, filename);
 
     if (!fs.existsSync(filePath)) {
         return res.status(404).send('File not found');
@@ -509,7 +780,8 @@ app.get('/api/video-preview/:filename', async (req, res) => {
     }
 
     // Check if transcode cache already exists
-    const previewPath = path.join(cacheDir, `${filename}.mp4`);
+    const previewName = `${getCacheKey(filePath)}.mp4`;
+    const previewPath = path.join(cacheDir, previewName);
     if (fs.existsSync(previewPath)) {
         return res.sendFile(previewPath);
     }
@@ -527,21 +799,22 @@ app.get('/api/video-preview/:filename', async (req, res) => {
     }
 });
 
-// List files in dump directory with rich metadata
+// List files in active source directory with rich metadata
 app.get('/new-list-dump-files', (req, res) => {
-    if (!fs.existsSync(dumpDir)) {
-        fs.mkdirSync(dumpDir, { recursive: true });
+    const activeDir = getSourceDir();
+    if (!fs.existsSync(activeDir)) {
+        try { fs.mkdirSync(activeDir, { recursive: true }); } catch (_) {}
         return res.json([]);
     }
     
     try {
-        const rawFiles = fs.readdirSync(dumpDir);
+        const rawFiles = fs.readdirSync(activeDir);
         const fileObjects = [];
 
         for (const file of rawFiles) {
             if (file.startsWith('.')) continue;
             try {
-                const filePath = path.join(dumpDir, file);
+                const filePath = path.join(activeDir, file);
                 const stat = fs.statSync(filePath);
                 if (stat.isFile()) {
                     fileObjects.push({
@@ -561,7 +834,7 @@ app.get('/new-list-dump-files', (req, res) => {
         
         res.json(fileObjects);
     } catch (err) {
-        console.error(`Error reading dump directory: ${err.message}`);
+        console.error(`Error reading source directory (${activeDir}): ${err.message}`);
         res.status(500).json({ message: err.message });
     }
 });
@@ -569,6 +842,23 @@ app.get('/new-list-dump-files', (req, res) => {
 // Get detailed stats of the app
 app.get('/api/stats', (req, res) => {
     try {
+        const activeDir = getSourceDir();
+        let sourceCount = 0;
+        let sourceSize = 0;
+        if (fs.existsSync(activeDir)) {
+            const files = fs.readdirSync(activeDir);
+            for (const f of files) {
+                if (f.startsWith('.')) continue;
+                try {
+                    const st = fs.statSync(path.join(activeDir, f));
+                    if (st.isFile()) {
+                        sourceCount++;
+                        sourceSize += st.size;
+                    }
+                } catch (_) {}
+            }
+        }
+
         let dumpCount = 0;
         let dumpSize = 0;
         if (fs.existsSync(dumpDir)) {
@@ -615,6 +905,13 @@ app.get('/api/stats', (req, res) => {
         });
 
         res.json({
+            sourceStats: {
+                path: activeDir,
+                name: getSourceInfo().name,
+                isDefault: getSourceInfo().isDefault,
+                count: sourceCount,
+                size: sourceSize
+            },
             dumpCount,
             dumpSize,
             folders: folderStats,

@@ -86,6 +86,32 @@ function createMainWindow(port) {
             label: 'File',
             submenu: [
                 {
+                    label: 'Pilih Folder Sumber untuk Disortir...',
+                    accelerator: 'CmdOrCtrl+O',
+                    click: () => {
+                        if (mainWindow) {
+                            mainWindow.webContents.executeJavaScript('window.triggerSelectSourceFolder && window.triggerSelectSourceFolder()');
+                        }
+                    }
+                },
+                {
+                    label: 'Buka Folder Sumber Saat Ini di Explorer',
+                    click: () => {
+                        if (mainWindow) {
+                            mainWindow.webContents.executeJavaScript('window.openCurrentFolderInExplorer && window.openCurrentFolderInExplorer()');
+                        }
+                    }
+                },
+                {
+                    label: 'Gunakan Folder Dump Default',
+                    click: () => {
+                        if (mainWindow) {
+                            mainWindow.webContents.executeJavaScript('window.resetToDefaultDumpFolder && window.resetToDefaultDumpFolder()');
+                        }
+                    }
+                },
+                { type: 'separator' },
+                {
                     label: 'Buka Folder Data (Storage)',
                     click: () => {
                         shell.openPath(dataDir);
